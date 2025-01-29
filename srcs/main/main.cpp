@@ -7,10 +7,12 @@
 
 int	main(int argc, char **argv)
 {
-	std::vector<Server>	servers;
+	//std::vector<Server>	servers;
 
+	ConfigParser	parser;
+	parser.tester(argv[1]);
 	(void)argc;
-	(void)argv;
+	//(void)argv;
 
 	return 0;
 }
