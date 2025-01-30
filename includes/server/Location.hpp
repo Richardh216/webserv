@@ -17,8 +17,15 @@
 // 	 * 
 // 	 */
 // 	private:
-// 		bool		is_internal; // (?)
 // 		std::string	path;
+
+// 		/**
+// 		 * Define a directory or a file from where the file should be searched
+// 		 * 
+// 		 * root ./htmls;
+// 		 * alias ./htmls/errors;
+// 		 * 
+// 		 */
 // 		std::string	root;
 // 		std::string alias;
 
@@ -27,12 +34,11 @@
 // 		 * 
 // 		 * limit_except GET POST DELETE;
 // 		 * 
-// 		 * (?)
-// 		 * bool	can_get;	|
-// 		 * bool	can_post;	|
-// 		 * bool	can_delete;	|-> by default all false
-// 		 * 
+// 		 * can be implemented with bool or with other types
 // 		 */
+// 		bool	can_get;
+// 		bool	can_post;
+// 		bool	can_delete;
 
 // 		/**
 // 		 * "Define a HTTP redirection"
@@ -60,11 +66,13 @@
 // 		std::string	index;
 
 // 		/**
+// 		 * Make the route able to accept uploaded files and
+// 		 * configure where they should be saved.
 // 		 * 
-// 		 * ◦ Execute CGI based on certain file extension (for example .php).
-// 		 * ◦ Make it work with POST and GET methods.
-// 		 * ◦ Make the route able to accept uploaded files and configure where they should be saved.
+// 		 * upload_path ./cgi-bin;
+// 		 * 
 // 		 */
+// 		std::string	upload_path;
 
 // 	public:
 // };
