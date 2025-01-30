@@ -51,6 +51,15 @@ int	ConfigParser::parseSize(const std::string &sizeStr) {
 	return std::stoi(sizeStr);
 }
 
+void	ConfigParser::getPortHost(const std::string &line, serverConfig &config) {
+	size_t	pos = line.find(':');
+	if (pos != std::string::npos) {
+		config.port = line.substr(pos + 1);
+		config.host = line.substr(0, pos);
+	}
+	//else default case?
+}
+
 void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list of serverConfig each contains a list of Route
 	std::ifstream	file(filename);
 	if (!file.is_open()) {
@@ -87,12 +96,10 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 
 		if (insideServer) {
 			if (line.find("listen") == 0) {
-				currentServer.port = std::stoi(getValue(line));
-			} else if (line.find("host") == 0) {
-				currentServer.host = trim(getValue(line));
+				getPortHost(getValue(line), currentServer);
 			} else if (line.find("server_name") == 0) {
 				currentServer.serverNames = split(getValue(line), ' ');
-			} else if (line.find("error_page") == 0) { // ???
+			} else if (line.find("error_page") == 0) {
 				std::vector<std::string>	parts = split(getValue(line), ' ');
 				if (parts.size() == 2) {
 					currentServer.errorPages[std::stoi(parts[0])] = parts[1]; //0 is error code like 404, 1 is the path to the html

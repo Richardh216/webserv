@@ -25,8 +25,10 @@ struct Route {
 };
 
 struct serverConfig {
-	int			port = 80;
-	std::string	host = "localhost";
+	// int			port = 80;
+	std::string		port;
+	// std::string	host = "localhost";
+	std::string	host;
 	std::vector<std::string>	serverNames;
 	std::map<int, std::string>	errorPages;
 	int	client_max_body_size = 0;
@@ -40,6 +42,7 @@ class	ConfigParser {
 		std::vector<std::string>	split(const std::string &str, char delim);
 		std::string	getLocationPath(const std::string &line);
 		int			parseSize(const std::string &sizeStr);
+		void		getPortHost(const std::string &line, serverConfig &config);
 	public:
 		std::vector<serverConfig>	servers;
 		void	parseConfigFile(const std::string &filename);
