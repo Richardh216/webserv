@@ -1,14 +1,12 @@
 #include "../../includes/webserv.hpp"
 
 // check for error codes in nginx
-// check if / is needed at the end of paths
 
-//1. redir code and redir path should be 2 vars
-//2 check autoindex if it's working correctly // should work
-//3 doesn't print root var from struct Route // has nothing to print
-//4 add alias feature for struct Route only // done
 //5 nginx behavior for duplicate directives in the same location or server section in config file
 
+//same port multiple times should not work, same IP and port on multiple servers should throw error, host:port chcek
+//check if common ports work 
+//check incoherent values for hostname and so on
 
 std::string	ConfigParser::trim(const std::string &str) {
 	size_t	first = str.find_first_not_of(" \t"); //first not whitespace
@@ -112,7 +110,7 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 				getPortHost(getValue(line), currentServer);
 			} else if (line.find("server_name") == 0) {
 				currentServer.serverNames = split(getValue(line), ' ');
-			} else if (line.find("root") == 0) {
+			} else if (line.find("root") == 0 && !insideRoute) {
 				currentServer.root = trim(getValue(line));
 			} else if (line.find("error_page") == 0) {
 				std::vector<std::string>	parts = split(getValue(line), ' ');
@@ -159,9 +157,20 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 	file.close();
 }
 
+void	ConfigParser::checkDuplicateServer(void) {
+	for (size_t i = 0; i < servers.size(); i++) {
+		for (size_t j = i + 1; j < servers.size(); j++) {
+			if ((servers[i].host == servers[j].host) && (servers[i].port == servers[j].port)) {
+				throw std::runtime_error("Duplicate Server Configuration Found: Same Host and Same Port on multiple Servers!");
+			}
+		}
+	}
+}
+
 void	ConfigParser::tester(const std::string &inFile) {
 	ConfigParser parser;
 	parser.parseConfigFile(inFile);
+	parser.checkDuplicateServer();
 
 	for (const auto &server : parser.servers) {
 		std::cout << "\nServer on " << server.host << ":" << server.port << "\n";

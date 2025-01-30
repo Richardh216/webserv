@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 #include <algorithm>
+#include <stdexcept>
 
 //class Server;
 //class Location;
@@ -48,5 +49,6 @@ class	ConfigParser {
 	public:
 		std::vector<serverConfig>	servers;
 		void	parseConfigFile(const std::string &filename);
+		void	checkDuplicateServer(void);
 		void	tester(const std::string &inFile);
 };
