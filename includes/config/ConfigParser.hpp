@@ -11,17 +11,18 @@
 //class Server;
 //class Location;
 
-struct Route { //add alias?
+struct Route {
 	std::string	path;
 	std::string	root;
 	std::vector<std::string>	allowedMethods;
 	bool	autoindex = false;
 	std::string	indexFile;
-	std::string	redirection;
+	std::map<int, std::string>	redirection;
 	std::string	cgiExtension;
 	std::string	cgiPath;
 	bool	uploadEnabled = false;
 	std::string	uploadPath;
+	std::string	alias;
 };
 
 struct serverConfig {

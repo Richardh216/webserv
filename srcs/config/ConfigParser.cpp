@@ -3,6 +3,13 @@
 // check for error codes in nginx
 // check if / is needed at the end of paths
 
+//1. redir code and redir path should be 2 vars
+//2 check autoindex if it's working correctly // should work
+//3 doesn't print root var from struct Route // has nothing to print
+//4 add alias feature for struct Route only // done
+//5 nginx behavior for duplicate directives in the same location or server section in config file
+
+
 std::string	ConfigParser::trim(const std::string &str) {
 	size_t	first = str.find_first_not_of(" \t"); //first not whitespace
 	if (first == std::string::npos) return "";
@@ -131,7 +138,10 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 				} else if (line.find("autoindex") == 0) {  //dir listing
 					currentRoute.autoindex = getValue(line) == "on";
 				} else if (line.find("return") == 0) { //redir
-					currentRoute.redirection = trim(getValue(line));
+					std::vector<std::string>	partsR = split(getValue(line), ' ');
+					if (partsR.size() == 2) {
+						currentRoute.redirection[std::stoi(partsR[0])] = partsR[1];
+					}
 				} else if (line.find("cgi_extension") == 0) {
 					currentRoute.cgiExtension = trim(getValue(line));
 				} else if (line.find("cgi_path") == 0) {
@@ -140,6 +150,8 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 					currentRoute.uploadEnabled = getValue(line) == "on"; //If value == "on", then currentRoute.autoindex = true, vice versa
 				} else if (line.find("upload_path") == 0) { //dir for file uploads
 					currentRoute.uploadPath = trim(getValue(line));
+				} else if (line.find("alias") == 0) {
+					currentRoute.alias = trim(getValue(line));
 				}
 			}
 		}
@@ -183,7 +195,13 @@ void	ConfigParser::tester(const std::string &inFile) {
 				for (const auto &method : route.allowedMethods) std::cout << method << " ";
 				std::cout << "\n";
 			}
-			if (!route.redirection.empty()) std::cout << "    Redirection: " << route.redirection << "\n";
+			if (!route.alias.empty()) std::cout << "    alias: " << route.alias << "\n";
+			if (!route.redirection.empty()) {
+			std::cout << " Redirection:\n";
+			for (const auto &redir : route.redirection) {
+				std::cout << "  " << redir.first << " -> " << redir.second << "\n";
+			}
+		}
 			if (!route.cgiExtension.empty()) std::cout << "    CGI Extension: " << route.cgiExtension << "\n";
 			if (!route.cgiPath.empty()) std::cout << "    CGI Path: " << route.cgiPath << "\n";
 			std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n";
