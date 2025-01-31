@@ -2,7 +2,6 @@
 #define	WEBSERV_HPP
 
 #include "./server/Server.hpp"
-#include "./server/Location.hpp"
 
 #include "./http/Request.hpp"
 #include "./http/Response.hpp"

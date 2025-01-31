@@ -18,11 +18,9 @@ SRCS_MAIN			:= main.cpp 									\
 
 SRCS_NETWORK		:= Connection.cpp Poller.cpp Sockets.cpp		\
 
-SRCS_SERVER			:= Location.cpp Server.cpp						\
-
 
 SRCS				:= $(SRCS_CONFIG) $(SRCS_HTTP) $(SRCS_MAIN)		\
-					   $(SRCS_NETWORK) $(SRCS_SERVER)				\
+					   $(SRCS_NETWORK)								\
 
 BUILDDIR			:= ./build
 ODIR				:= $(BUILDDIR)/obj

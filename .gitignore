@@ -2,4 +2,6 @@ webserv
 .vscode/
 *.o
 *.d
-draft.txt
+draft.conf
+project_info.conf
+.DS_Store

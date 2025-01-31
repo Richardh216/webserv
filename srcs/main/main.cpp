@@ -1,14 +1,7 @@
 #include "../../includes/webserv.hpp"
 
-/**
- * create an array of 'Server' objects for each
- * server from configuration file
- */
-
 int	main(int argc, char **argv)
 {
-	//std::vector<Server>	servers;
-
 	ConfigParser	parser;
 
 	try {
@@ -19,7 +12,8 @@ int	main(int argc, char **argv)
 		std::cerr << "Error: " << e.what() << std::endl;
 	}
 	(void)argc;
-	//(void)argv;
+
+	//setupSockets(parser.servers);
 
 	return 0;
 }
