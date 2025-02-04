@@ -1,10 +1,25 @@
 #ifndef	REQUEST_HPP
 #define	REQUEST_HPP
 
-class Request
-{
-	public:
-	private:
-};
+// #include <iostream>
+// #include <sstream>
+// #include <map>
+// #include <string>
+
+// struct HttpRequest {
+// 	std::string	method;
+// 	std::string	path;
+// 	std::string	httpVersion;
+// 	std::map<std::string, std::string>	headers;
+// 	std::string	body;
+// };
+
+// // class Request
+// // {
+// // 	public:
+// // 	private:
+// // };
+
+// HttpRequest	parseHttpRequest(const std::string &rawRequest);
 
 #endif

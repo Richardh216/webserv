@@ -5,3 +5,5 @@ webserv
 draft.conf
 project_info.conf
 .DS_Store
+Dockerfile
+start.sh
