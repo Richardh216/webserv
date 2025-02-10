@@ -11,13 +11,24 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-unsigned short	convertStrToUShort(const std::string& s);
-struct in_addr	convertStrIpToBinIP(std::string& ip_str,
-					const serverConfig& server);
+class Sockets
+{
+	private:
+		static const int	BACKLOG = 100;
 
-void	setupSockets(std::vector<serverConfig>& servers);
+		unsigned short	convertStrToUShort(const std::string& s);
+		struct in_addr	convertStrIpToBinIP(std::string& ip_str,
+							const std::string& server_name,
+							const std::string& port);
+
+		void	setNonblockMode(int fd, const std::string& server_name);
+		void	bindSocket(int sock_fd, const std::string& server_name,
+					const serverConfig& server);
+	public:
+		std::vector<int>	server_fds;
+		void	initSockets(std::vector<serverConfig>& servers);
+};
+
 void	error_exit(const std::string& msg, const std::string& server_name);
-void	setNonblockMode(int fd, const std::string& server_name);
-void	bindSocket(int sock_fd, const serverConfig& server);
 
 #endif
