@@ -5,6 +5,7 @@
 #include <sstream>
 #include <map>
 #include <string>
+#include <regex>
 
 struct HttpRequest {
 	std::string	method;
