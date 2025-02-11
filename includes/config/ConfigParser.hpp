@@ -20,6 +20,11 @@ class	ConfigParser {
 	public:
 		std::vector<serverConfig>	servers;
 		void	parseConfigFile(const std::string &filename);
-		void	checkDuplicateServer(void);
 		void	tester(const std::string &inFile);
+		void	checkDuplicateServer(void);
+		void	checkDuplicateLocationPath(void);
+		void	checkRootAlias(void);
+		void	checkErrorPagesPath(void);
+		void	removeInvalidLocationPath(void);
+		void	checkingFunction();
 };
