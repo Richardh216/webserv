@@ -8,6 +8,28 @@
 //check if common ports work 
 //check incoherent values for hostname and so on
 
+/*
+to do: 
+1. we can not have more than 1 location for the same path
+	location /images {...}
+	location /images {...} -> error: /images are the same path
+
+2. we can not have more than 1 root or alias directives in the same location or server sections
+
+3. we can not have alias and root directives in the same location section
+
+4. delete every location with a path that is not started with /
+(./images, images, images/) -> delete them only after checking the 1-3 rules
+
+because Nginx will still print an error message for the 1-3 cases, but will ignore
+these locations if they are not starting from /
+
+error_page directive path should also start from /
+
+it is not necessary to start path with / for the root and alias
+
+*/
+
 std::string	ConfigParser::trim(const std::string &str) {
 	size_t	first = str.find_first_not_of(" \t"); //first not whitespace
 	if (first == std::string::npos) return "";

@@ -4,10 +4,17 @@
 //potential \r\n\r\n missing
 //no content length may cause issues
 
-//have to completely rewrite handleClientFd!!!!!!
-//this will be a huge change and the engine behind our webserver
+//have to rewrite handleClientFd potentially
 
 //create checker for parseHttpRequest and then try to implement it through sockets
+
+/*
+To do: 
+DONE 1. Make all header names, but not values follow the same case format:
+	-First letter -> Uppercase
+	-Everything else -> Lowercase
+	(Host, From, ...)
+*/
 
 HttpRequest	parseHttpRequest(const std::string &rawRequest) {
 	std::istringstream	stream(rawRequest);
@@ -63,6 +70,17 @@ HttpRequest	parseHttpRequest(const std::string &rawRequest) {
 		val.erase(0, val.find_first_not_of(" \t"));
 		val.erase(val.find_last_not_of(" \t") + 1);
 
+		key[0] = std::toupper(key[0]); //this ugly bit of code makes first letters capitalized, while keeping everything else lowercase
+		size_t j = 0;
+		for (size_t i = 1; i < key.size() - 1; i++) {
+			if (key[i] == '-' && i + 1 < key.size()) {
+					key[i + 1] = std::toupper(key[i + 1]);
+					j = i + 1;
+			} else if (j != i) {
+				key[i] = std::tolower(key[i]);
+			}
+		}
+
 		request.headers[key] = val;
 	}
 
@@ -107,9 +125,9 @@ int	httpRequestTester(void) {
 
 	std::string testRequest2 =
 		"POST /submit HTTP/1.1\r\n"
-		"Host: example.com\r\n"
-		"Content-Length: 12\r\n"
-		"Content-Type: application/x-www-form-urlencoded\r\n"
+		"hOSt: example.com\r\n"
+		"coNTenT-lEnGth: 12\r\n"
+		"content-type: application/x-www-form-urlencoded\r\n"
 		"\r\n"
 		"name=JohnDoe";
 
