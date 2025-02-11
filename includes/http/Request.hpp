@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include <regex>
+#include <set>
 
 struct HttpRequest {
 	std::string	method;
@@ -24,5 +25,6 @@ struct HttpRequest {
 // // };
 
 HttpRequest	parseHttpRequest(const std::string &rawRequest);
+int	httpRequestTester(void);
 
 #endif
