@@ -7,6 +7,12 @@
 #include <string>
 #include <regex>
 #include <set>
+#include <vector>
+#include <stdexcept>
+#include <iomanip>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <poll.h>
 
 struct HttpRequest {
 	std::string	method;
@@ -18,13 +24,7 @@ struct HttpRequest {
 	std::string	errorMessage;
 };
 
-// // class Request
-// // {
-// // 	public:
-// // 	private:
-// // };
-
-HttpRequest	parseHttpRequest(const std::string &rawRequest);
-int	httpRequestTester(void);
+HttpRequest	parseHttpRequest(int clientFd);
+void		testParseHttpRequest(void);
 
 #endif

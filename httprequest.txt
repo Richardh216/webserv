@@ -1,6 +1,13 @@
-POST /api/data HTTP/1.1
-Host: example.com
-Content-Type: application/json
-Content-Length: 27
+HTTP/1.1 200 OK
+Date: Fri, 31 Dec 1999 23:59:59 GMT
+Content-Type: text/plain
+Transfer-Encoding: chunked
+1a; ignore-stuff-here			// size of a chunk
+abcdefghijklmnopqrstuvwxyz		//data
+10								// size of a chunk
+1234567890abcdef				//data
+0								//end of a chunked message body
+some-footer: some-value			//|
+another-footer: another-value	//|-> if they are present then include them in the headers map
+[blank line here]
 
-{"name": "John", "age": 30}
