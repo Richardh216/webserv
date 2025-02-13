@@ -6,64 +6,72 @@
 /*   By: ashirzad <ashirzad@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/02/11 12:34:29 by ashirzad          #+#    #+#             */
-/*   Updated: 2025/02/11 15:21:36 by ashirzad         ###   ########.fr       */
+/*   Updated: 2025/02/12 13:03:52 by ashirzad         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include <iostream>
-#include <string>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <map>
+#include "CGI_Handler.hpp"
 
-class CgiHandler
+CGIHandler::CGIHandler(void)
 {
-public:
-    void executeCgi(const std::string& scriptPath, const std::map<std::string, std::string>& envVars)
+	this->_env["CONTENY_TYPE"] = "text/html";
+	this->_env["REQUEST_METHOD"] = "GET";
+	this->_env["QUERY_STRING"] = "name=Ali?message=Hello";
+}
+
+CGIHandler::~CGIHandler(void)
+{
+
+}
+
+char **CGIHandler::getEnvAsCstrArray(void)
+{
+	char **env = new char*[_env.size() + 1];
+	int i = 0;
+
+	for (std::map<std::string, std::string>::iterator it = _env.begin(); it != _env.end(); it++)
 	{
-        pid_t pid = fork();
-        if (pid == 0) {
-            for (const auto& envVar : envVars) {
-                setenv(envVar.first.c_str(), envVar.second.c_str(), 1);
-            }
-            // Redirect stdout to a pipe
-            dup2(_stdoutPipe[1], STDOUT_FILENO);
-            close(_stdoutPipe[0]);
-            // Execute the script
-            execl(scriptPath.c_str(), scriptPath.c_str(), NULL);
-            exit(1); // If execl fails
-        } else if (pid > 0) {
-            // Parent process: Read the output of the script
-            close(_stdoutPipe[1]);
-            char buffer[4096];
-            ssize_t bytesRead = read(_stdoutPipe[0], buffer, sizeof(buffer));
-            if (bytesRead > 0) {
-                _response.assign(buffer, bytesRead);
-            }
-            close(_stdoutPipe[0]);
-            waitpid(pid, NULL, 0); // Wait for the child process to finish
-        } else {
-            std::cerr << "Failed to fork process" << std::endl;
-        }
-    }
+		std::string value = it->first + "=" + it->second;
+		env[i] = new char[value.size() + 1];
+		env[i] = strcpy(env[i], (const char *)value.c_str());
+		i++;
+	}
+	env[i] = NULL;
+	return (env);
+}
 
-    std::string getResponse() const {
-        return _response;
-    }
+void CGIHandler::executeCGI(void)
+{
+	int pipefd[2];
 
-private:
-    int _stdoutPipe[2];
-    std::string _response;
-};
+	if (pipe(pipefd) == -1)
+	{
+		perror("pipe error\n");
+		return ;
+	}
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		close(pipefd[0]);
+		setenv("QUERY_STRING", _env["QUERY_STRING"].c_str(), 1);
 
-int main() {
-    CgiHandler handler;
-    std::map<std::string, std::string> envVars = {
-        {"REQUEST_METHOD", "GET"},
-        {"QUERY_STRING", "name=John&age=30"},
-        {"SCRIPT_NAME", "/cgi-bin/script.py"}
-    };
-    handler.executeCgi("/path/to/script.py", envVars);
-    std::cout << "CGI Response:\n" << handler.getResponse() << std::endl;
-    return 0;
+		dup2(pipefd[1], STDOUT_FILENO);
+		close(pipefd[1]);
+
+		execve("script.py", NULL, getEnvAsCstrArray());
+		perror("execve failed");
+		exit(0);
+	} else {
+		close(pipefd[1]);
+		char buffer[1024];
+
+		ssize_t bytesRead;
+		while ((bytesRead = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0)
+		{
+			buffer[bytesRead] = '\0';
+			std::cout << buffer;
+		}
+		close(pipefd[0]);
+		waitpid(pid, NULL, 0);
+	}
 }

@@ -14,7 +14,7 @@ SRCS_CONFIG			:= ConfigParser.cpp 							\
 
 SRCS_HTTP			:= Request.cpp Response.cpp 					\
 
-SRCS_MAIN			:= main.cpp 									\
+SRCS_MAIN			:= main.cpp utils.cpp							\
 
 SRCS_NETWORK		:= Connection.cpp Poller.cpp Sockets.cpp		\
 

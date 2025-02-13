@@ -12,4 +12,6 @@
 #include "./network/Poller.hpp"
 #include "./network/Sockets.hpp"
 
+#include "./main/utils.hpp"
+
 #endif

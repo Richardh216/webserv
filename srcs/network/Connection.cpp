@@ -37,16 +37,17 @@ void	Connection::handleClientFd(struct pollfd& pollfd)
 
 	for (;;) {
 		bytesRead = recv(pollfd.fd, buff.data(), sizeof(buff), 0);
-		if (bytesRead < 0)
+		if (bytesRead < 0) {
 			break;
+		}
 		else if (bytesRead == 0) {
 			//delete 'pollfd' from the 'poll_fds' array
 			close(pollfd.fd);
 			pollfd.fd = -1;
 			break;
 		}
-		else
+		else {
 			std::cout.write(buff.data(), bytesRead);
-		break;
+		}
 	}
 }
