@@ -1,45 +1,5 @@
 #include "../../includes/webserv.hpp"
 
-//keep in mind potential timeout
-//potential \r\n\r\n missing
-//no content length may cause issues
-
-//have to rewrite handleClientFd potentially
-
-//create checker for parseHttpRequest and then try to implement it through sockets
-
-/*
-To do: 
-
-1)read a request until the start of the body (after the '\r\n' line)
-
-2)check headers
-
-3)if there is "Transfer-Encoding: chunked" header:
-	-read the first line until ';' or '\r\n' or '\n' -> this is the 'size' of the chunk data (in hex)
-	-read 'size' bytes data
-	-if you will encounter '0\r\n' line then this is the end of all chunks
-
-4)if there is "Content-Length: 42" header then a request should be normal. We just need to read e.g. 42 bytes in the body section.
-(A request with both "Transfer-Encoding" and "Content-Length" is malformed and should be rejected with 400 Bad Request ->
-to form and send this response - this is my part, just include a bool var which I will check)
-
-Request string could be incomplete, so you need to check everytime where did you stop and where you should continue.
-
-General steps for both of us:
--store partial requests;
--append incoming data;
--when a full request is received, process it;
--if the request is incomplete and we wait too long, we should discard the data and close the connection;
-
-
-You need to use socket fd (poller.poll_fds[i].fd) directly in your code with recv() function for reading data,
-because for passing complete http request string to your function I need to check Content-Length header
-for reading specific amount of bytes. Because of that when you parse a request you need to check headers
-(Content-Length and Transfer-Encoding) and based on them handle body respectively
-
-*/
-
 HttpRequest	parseHttpRequest(int clientFd) {
 	constexpr size_t	BUFFER_SIZE = 4096;
 	std::vector<char>	buffer(BUFFER_SIZE);
@@ -62,10 +22,8 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			return request;
 		}
 		bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
-		std::cout << "Bytes Read: " << bytesRead << "\n"; // Debugging line ##############
 		if (bytesRead <= 0) break; // No more data
 		rawRequest.append(buffer.data(), bytesRead); // buffer.data() returns a pointer to its first element
-		std::cout << "Raw Request: " << rawRequest << "\n"; // Debugging line ##############
 		if (rawRequest.find("\r\n\r\n") != std::string::npos) break; // End of headers
 	}
 
@@ -82,7 +40,6 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	// Read and parse the request line
 	if (!std::getline(stream, line) || line.empty()) {
-		std::cout << "Invalid or empty request line: " << line << "\n"; // Debugging line ##############
 		request.isValid = false;
 		request.errorMessage = "Invalid or empty request line.";
 		return request;
@@ -90,15 +47,10 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	std::istringstream	lineStream(line);
 	if (!(lineStream >> request.method >> request.path >> request.httpVersion)) {
-		std::cout << "Invalid request line: " << line << "\n"; // Debugging line ##################
 		request.isValid = false;
 		request.errorMessage = "Invalid request line.";
 		return request;
 	}
-
-	std::cout << "Method: " << request.method << "\n"; // Debugging line #################
-	std::cout << "Path: " << request.path << "\n"; // Debugging line #################
-	std::cout << "HTTP Version: " << request.httpVersion << "\n"; // Debugging line #################
 
 	//check http method
 	static const std::set<std::string>	validMethods = {"GET", "POST", "DELETE"};
@@ -117,7 +69,6 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	//read headers
 	while (std::getline(stream, line) && line != "\r") {
-		std::cout << "Header line: " << line << "\n"; // Debugging line ###########
 		size_t	colonPos = line.find(':');
 		if (colonPos == std::string::npos) {
 			request.isValid = false;
@@ -135,19 +86,21 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		val.erase(0, val.find_first_not_of(" \t"));
 		val.erase(val.find_last_not_of(" \t") + 1);
 
-		std::cout << "Header: " << key << ": " << val << "\n"; // Debugging line ##########
-
-		//check if needed
-		// key[0] = std::toupper(key[0]); //this ugly bit of code makes first letters capitalized, while keeping everything else lowercase
-		// size_t j = 0;
-		// for (size_t i = 1; i < key.size() - 1; i++) {
-		// 	if (key[i] == '-' && i + 1 < key.size()) {
-		// 			key[i + 1] = std::toupper(key[i + 1]);
-		// 			j = i + 1;
-		// 	} else if (j != i) {
-		// 		key[i] = std::tolower(key[i]);
-		// 	}
-		// }
+		//this ugly bit of code makes first letters capitalized, while keeping everything else lowercase
+		key[0] = std::toupper(key[0]);
+		size_t j = 0;
+		for (size_t i = 1; i < key.size() - 1; i++) {
+			if (key[i] == '-' && i + 1 < key.size()) {
+					key[i + 1] = std::toupper(key[i + 1]);
+					j = i + 1;
+			} else if (j != i) {
+				key[i] = std::tolower(key[i]);
+			}
+		}
+		//handle the last character
+		if (key.size() > 1 && j != key.size() - 1) {
+			key[key.size() - 1] = std::tolower(key[key.size() - 1]);
+		}
 
 		request.headers[key] = val;
 	}
@@ -225,30 +178,51 @@ HttpRequest	parseHttpRequest(int clientFd) {
 }
 
 void testParseHttpRequest(void) {
-	std::string httpRequest =
-		"GET /index.html HTTP/1.1\r\n"
-		"Host: www.example.com\r\n"
-		"Connection: keep-alive\r\n"
-		"Content-Length: 13\r\n"
+
+		std::string httpRequest =
+		"POST /api/data HTTP/1.1\r\n"
+		"Host: api.example.com\r\n"
+		"User-Agent: MyTestClient/2.0\r\n"
+		"Content-Type: application/json\r\n"
+		"Accept: application/json\r\n"
+		"Authorization: Bearer abcdef123456\r\n"
+		"Content-Length: 53\r\n"
 		"\r\n"
-		"Hello, world!";  // Simple body
+		"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 
-	int fds[2];
-	pipe(fds);
-	write(fds[1], httpRequest.c_str(), httpRequest.size());
-	close(fds[1]);  // Close write end to signal EOF
+	// std::string httpRequest =
+	// 	"GET /index.html HTTP/1.1\r\n"
+	// 	"Host: www.example.com\r\n"
+	// 	"Connection: keep-alive\r\n"
+	// 	"conteNT-lENgth: 13\r\n"
+	// 	"\r\n"
+	// 	"Hello, world!";  // Simple body
 
-	// Directly call parseHttpRequest without reading first
-	HttpRequest request = parseHttpRequest(fds[0]);
-
-	// Output parsed results
-	std::cout << "Method: " << request.method << "\n";
+	int sv[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1) {
+		perror("socketpair");
+		exit(EXIT_FAILURE);
+	}
+		
+	// Write the HTTP request to one end of the socketpair.
+	ssize_t n = write(sv[1], httpRequest.c_str(), httpRequest.size());
+	std::cout << "Bytes written to socketpair: " << n << "\n";
+		
+	// Signal EOF on the writing end.
+	shutdown(sv[1], SHUT_WR);
+		
+	// Directly call parseHttpRequest using the reading end of the socketpair.
+	HttpRequest request = parseHttpRequest(sv[0]);
+		
+	// Output parsed results.
+	std::cout << "\nMethod: " << request.method << "\n";
 	std::cout << "Path: " << request.path << "\n";
 	std::cout << "HTTP Version: " << request.httpVersion << "\n";
 	for (const auto& header : request.headers) {
 		std::cout << header.first << ": " << header.second << "\n";
 	}
 	std::cout << "Body: " << request.body << "\n";
-
-	close(fds[0]);
+		
+	close(sv[0]);
+	close(sv[1]);
 }

@@ -25,6 +25,6 @@ struct HttpRequest {
 // // };
 
 HttpRequest	parseHttpRequest(const std::string &rawRequest);
-int	httpRequestTester(void);
+void		testParseHttpRequest(void);
 
 #endif

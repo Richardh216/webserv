@@ -16,7 +16,7 @@ int	main(int argc, char **argv)
 		parser.parseConfigFile(config_path); //no prints, needs checking called after
 		parser.checkingFunction();
 
-		// httpRequestTester(); //prints the tests
+		testParseHttpRequest(); //prints the tests for HTTP parsing, it now uses sokcets and file descriptor instead of rawString
 
 		server_sockets.initSockets(parser.servers);
 		poller.initPoll(server_sockets.server_fds);
