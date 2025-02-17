@@ -35,6 +35,16 @@ void	Connection::handleClientFd(struct pollfd& pollfd)
     std::vector<char> buff(BUFFER_SIZE);
     ssize_t bytesRead;
 
+	// HttpRequest	request = parseHttprequest(pollfd.fd); //you can call the parser here for example
+	//and then you can check if parsing was successful for example with: 
+
+	// if (!request.isValid) {
+	// 	std::cerr << "Error parsing HTTP request: " << request.errorMessage << std::endl;
+	// 	//handle the error
+	// } else {
+	// 	//process the valid request
+	// }
+
 	for (;;) {
 		bytesRead = recv(pollfd.fd, buff.data(), sizeof(buff), 0);
 		if (bytesRead < 0) {

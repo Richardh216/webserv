@@ -5,35 +5,35 @@ HttpRequest	parseHttpRequest(int clientFd) {
 	std::vector<char>	buffer(BUFFER_SIZE);
 	std::string			rawRequest;
 	ssize_t				bytesRead;
-	struct pollfd	pfd = {clientFd, POLLIN, 0};
 
-	// Read data from the client with polling to avoid blocking indefinitely
+	//Reading request data
 	while (true) {
-		int	ret = poll(&pfd, 1, 5000); //5 second timeout
-		if (ret == -1) { // Polling error
-			HttpRequest	request;
-			request.isValid = false;
-			request.errorMessage = "Polling error.";
-			return request;
-		} else if (ret == 0) { // Timeout occurred
-			HttpRequest	request;
-			request.isValid = false;
-			request.errorMessage = "Polling timeout.";
-			return request;
-		}
 		bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
-		if (bytesRead <= 0) break; // No more data
+		if (bytesRead < 0) {
+			HttpRequest request;
+			request.isValid = false;
+			request.errorMessage = "Error recieving data.";
+			return request;
+		} else if (bytesRead == 0) {
+			break; //the client closed the connection
+		}
 		rawRequest.append(buffer.data(), bytesRead); // buffer.data() returns a pointer to its first element
-		if (rawRequest.find("\r\n\r\n") != std::string::npos) break; // End of headers
+		// If headers are complete and this is not a chunked request, break early.
+		// if (rawRequest.find("\r\n\r\n") != std::string::npos &&
+		// 	rawRequest.find("Transfer-Encoding: chunked") == std::string::npos) {
+		// 		break; // End of headers
+		// }
 	}
 
-	if (bytesRead < 0) { // Error in receiving data
+	// if no data was read, return invalid request
+	if (rawRequest.empty()) {
 		HttpRequest request;
 		request.isValid = false;
-		request.errorMessage = "Failed to recieve data.";
+		request.errorMessage = "Empty request.";
 		return request;
 	}
 
+	//start parsing from rawReqeust
 	std::istringstream	stream(rawRequest);
 	HttpRequest			request;
 	std::string			line;
@@ -45,7 +45,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		return request;
 	}
 
-	std::istringstream	lineStream(line);
+	std::istringstream	lineStream(line); //split the request line into method, path ...
 	if (!(lineStream >> request.method >> request.path >> request.httpVersion)) {
 		request.isValid = false;
 		request.errorMessage = "Invalid request line.";
@@ -53,7 +53,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 	}
 
 	//check http method
-	static const std::set<std::string>	validMethods = {"GET", "POST", "DELETE"};
+	static const std::set<std::string>	validMethods = {"GET", "POST", "DELETE"}; //only these methods are allowed
 	if (validMethods.find(request.method) == validMethods.end()) {
 		request.isValid = false;
 		request.errorMessage = "Invalid HTTP method for the project: " + request.method;
@@ -68,8 +68,8 @@ HttpRequest	parseHttpRequest(int clientFd) {
 	}
 
 	//read headers
-	while (std::getline(stream, line) && line != "\r") {
-		size_t	colonPos = line.find(':');
+	while (std::getline(stream, line) && line != "\r") { //Reads each line until "\r", which is the end of headers
+		size_t	colonPos = line.find(':'); //Finds the ":" separator in each header
 		if (colonPos == std::string::npos) {
 			request.isValid = false;
 			request.errorMessage = "Invalid header: " + line;
@@ -118,21 +118,16 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	// Handle request body
 	if (hasContentLength) {
-		int	contentLen = std::stoi(request.headers.at("Content-Length"));
+		int	contentLen = std::stoi(request.headers.at("Content-Length")); //converts it to int
 		if (contentLen < 0) {
 			request.isValid = false;
 			request.errorMessage = "Invalid Content-Length value.";
 			return request;
 		}
 
-		// Read the body based on Content-Length
-		while (rawRequest.length() < static_cast<size_t>(contentLen)) {
-			int	ret = poll(&pfd, 1, 5000);
-			if (ret <= 0) {
-				request.isValid = false;
-				request.errorMessage = "Polling timeout or error while reading body.";
-				return request;
-			}
+		 // If the entire body wasn't already received with the headers,
+		// continue reading from the socket.
+		while (rawRequest.size() < rawRequest.find("\r\n\r\n") + 4 + static_cast<size_t>(contentLen)) {
 			bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 			if (bytesRead <= 0) {
 				request.isValid = false;
@@ -141,45 +136,85 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			}
 			rawRequest.append(buffer.data(), bytesRead);
 		}
-		request.body = rawRequest.substr(rawRequest.find("\r\n\r\n") + 4, contentLen); //Extracts the body from rawRequest
+		size_t	bodyStart = rawRequest.find("\r\n\r\n") + 4; //start of body
+		request.body = rawRequest.substr(bodyStart, contentLen); //Extracts the body from rawRequest
 	}
 
 	// Handle chunked transfer encoding
-	if (hasChunkedEncoding) {
-		std::ostringstream	bodyStream; //output string stream, allows appending to a string like writing to a file
-		while (std::getline(stream, line)) {
-			if (line.empty()) continue;
-			int	chunkSize;
-			std::istringstream	chunkSizeStream(line);
-			chunkSizeStream >> std::hex >> chunkSize; //Reads chunk size as a hexadecimal value.
-			if (chunkSize == 0) break; // End of chunks
+	else if (hasChunkedEncoding) {
+		std::string	chunkedBody;
+		size_t	pos = rawRequest.find("\r\n\r\n"); //find where body begins
+		if (pos == std::string::npos) {
+			request.isValid = false;
+			request.errorMessage = "Headers not complete.";
+			return request;
+		}
+		pos += 4; //skip the header delim
 
-			while (rawRequest.length() < static_cast<size_t>(chunkSize)) {
-				int	ret = poll(&pfd, 1, 5000);
-				if (ret <= 0) {
-					request.isValid = false;
-					request.errorMessage = "Polling timeout or error while reading chunk.";
-					return request;
-				}
+		// Skip any extra CRLFs that may be present after the header delimiter.
+		while (rawRequest.compare(pos, 2, "\r\n") == 0) {
+			pos += 2;
+		}
+
+		while (true) { //breaks when 0\r\n is found
+			// Find the CRLF that ends the chunk size line.
+			size_t	lineEnd = rawRequest.find("\r\n", pos); //search for \r\n starting from pos
+			while (lineEnd == std::string::npos) { //if \r\n is not found, line is incomplete, need more data
 				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 				if (bytesRead <= 0) {
 					request.isValid = false;
-					request.errorMessage = "Incomplete chunked transfer encoding.";
+					request.errorMessage = "Incomplete chunked transfer encoding: missing chunk size line.";
+					return request;
+				}
+				rawRequest.append(buffer.data(), bytesRead);
+				lineEnd = rawRequest.find("\r\n", pos); //re-check if \r\n is now available
+			}
+			//Extract the chunk size (in hexadecimal)
+			std::string chunkSizeStr = rawRequest.substr(pos, lineEnd - pos); //extracts chunkSize as a string
+			int	chunkSize;
+			std::istringstream	iss(chunkSizeStr);
+			iss >> std::hex >> chunkSize; //converts hex chunkSize into int
+			if (chunkSize == 0) { //the last chunk was received, end of the loop
+				break;
+			}
+
+			size_t chunkDataStart = lineEnd + 2; //Move past the chunk size line (and its CRLF)
+			// Ensure the entire chunk and its trailing CRLF are available
+			while (rawRequest.size() < chunkDataStart + chunkSize + 2) { //If rawRequest is too short, call recv() to read more data from the socket
+				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
+				if (bytesRead <= 0) {
+					request.isValid = false;
+					request.errorMessage = "Incomplete chunked transfer encoding: chunk data missing.";
 					return request;
 				}
 				rawRequest.append(buffer.data(), bytesRead);
 			}
-			bodyStream.write(rawRequest.c_str(), chunkSize);
-			stream.ignore(2); // Ignore the CRLF after chunk
+			chunkedBody.append(rawRequest.substr(chunkDataStart, chunkSize)); // Append the chunk data to the chunkBody
+			pos = chunkDataStart + chunkSize + 2; // Advance the pointer past the chunk data and the trailing CRLF
 		}
-		request.body = bodyStream.str();
+		request.body = chunkedBody; //store full body
 	}
 	return request;
 }
 
 void testParseHttpRequest(void) {
 
-		std::string httpRequest =
+	// std::string httpRequest = //chunked transfer encoding
+	// 	"POST /api/data HTTP/1.1\r\n"
+	// 	"Host: api.example.com\r\n"
+	// 	"User-Agent: MyTestClient/2.0\r\n"
+	// 	"Content-Type: application/json\r\n"
+	// 	"Accept: application/json\r\n"
+	// 	"Transfer-Encoding: chunked\r\n"
+	// 	"\r\n"
+	// 	"4\r\n"
+	// 	"Wiki\r\n"
+	// 	"5\r\n"
+	// 	"pedia\r\n"
+	// 	"0\r\n"
+	// 	"\r\n";
+
+		std::string httpRequest = //content-length
 		"POST /api/data HTTP/1.1\r\n"
 		"Host: api.example.com\r\n"
 		"User-Agent: MyTestClient/2.0\r\n"
