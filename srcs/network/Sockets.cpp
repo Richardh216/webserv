@@ -50,27 +50,36 @@ struct in_addr	Sockets::convertStrIpToBinIP(std::string& ip_str,
 }
 
 void	Sockets::bindSocket(int sock_fd, const std::string& server_name,
-	const serverConfig& server)
+	serverConfig& server)
 {
-	struct sockaddr_in	sock_addr;
-
-	std::memset(&sock_addr, 0, sizeof(sock_addr));
-	sock_addr.sin_family = AF_INET;
-
-	unsigned short server_port = convertStrToUShort(server.port);
-	sock_addr.sin_port = htons(server_port);
-
-	std::string str_ip = (server.host.empty() ? "0.0.0.0" : server.host);
-
-	sock_addr.sin_addr = convertStrIpToBinIP(str_ip, server_name, server.port);
-
-	if (bind(sock_fd, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) == -1)
+	if (bind(sock_fd, (struct sockaddr *)&server.bind_addr, sizeof(server.bind_addr)) == -1)
 		error_exit("failed to bind a socket", server_name);
 }
 
 void	Sockets::initSockets(std::vector<serverConfig>& servers)
 {
-	for (const auto& server : servers) {
+	std::vector<std::string> to_bind;
+
+	//init server.host and server.bind_addr
+	for (auto& server : servers) {
+		if (server.host.empty())
+			server.host = "0.0.0.0";
+
+		std::string server_name = "";
+		if (!server.serverNames.empty())
+			server_name = server.serverNames.front();
+		std::memset(&server.bind_addr, 0, sizeof(server.bind_addr));
+		server.bind_addr.sin_family = AF_INET;
+		server.bind_addr.sin_port = htons(convertStrToUShort(server.port));
+		server.bind_addr.sin_addr = convertStrIpToBinIP(server.host, server_name, server.port);
+	}
+
+	for (auto& server : servers) {
+
+		//skip the same host:port endpoints
+		std::string endpoint = server.host + ":" + server.port;
+		if (std::find(to_bind.begin(), to_bind.end(), endpoint) != to_bind.end()) continue;
+		else to_bind.push_back(endpoint);
 
 		std::string server_name = "";
 		if (!server.serverNames.empty())

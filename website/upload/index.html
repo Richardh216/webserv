@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv - File Upload</title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(120deg, #141E30, #243B55);
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+            width: 350px;
+        }
+        header {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+			text-align: center;
+        }
+        input[type="file"] {
+			display: none;
+        }
+		.custom-file-upload {
+			padding: 10px;
+			font-size: 1rem;
+			border: none;
+			border-radius: 5px;
+			background: white;
+			color: gray;
+			text-align: center;
+			cursor: pointer;
+			display: inline-block;
+			width: 100%;
+			box-sizing: border-box;
+		}
+		.custom-file-upload:hover {
+			background: #f0f0f0;
+		}
+        button {
+            padding: 10px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            background: #007BFF;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .back-link {
+            margin-top: 15px;
+        }
+        .back-link a {
+            color: white;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>Upload Form</header>
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+			<input type="text" name="first_name" placeholder="First Name" required>
+			<input type="text" name="last_name" placeholder="Last Name" required>
+			<label for="file-upload" class="custom-file-upload">Choose File</label>
+			<input id="file-upload" type="file" name="file" accept="image/png, image/jpeg, .txt" required>
+			<button type="submit">Submit</button>
+		</form>		
+        <div class="back-link">
+            <a href="/">&#8592; Back to Main Page</a>
+        </div>
+    </div>
+</body>
+</html>

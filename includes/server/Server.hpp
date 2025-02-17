@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <netinet/in.h>
 
 struct Route {
 	std::string	path;
@@ -20,15 +21,14 @@ struct Route {
 };
 
 struct serverConfig {
-	// int			port = 80;
-	std::string		port;
-	// std::string	host = "localhost";
+	std::string	port;
 	std::string	host;
 	std::vector<std::string>	serverNames;
 	std::map<int, std::string>	errorPages;
 	int	client_max_body_size = 0;
 	std::string		root;
 	std::vector<Route> routes;
+	struct sockaddr_in	bind_addr; // for Sockets::bindSocket()
 };
 
 #endif

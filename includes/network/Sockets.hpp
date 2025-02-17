@@ -23,7 +23,7 @@ class Sockets
 
 		void	setNonblockMode(int fd, const std::string& server_name);
 		void	bindSocket(int sock_fd, const std::string& server_name,
-					const serverConfig& server);
+					serverConfig& server);
 	public:
 		std::vector<int>	server_fds;
 		void	initSockets(std::vector<serverConfig>& servers);

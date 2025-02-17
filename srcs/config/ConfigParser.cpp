@@ -269,7 +269,7 @@ void	ConfigParser::removeInvalidLocationPath() { //creates a new list of routes 
 
 //play around with config file to test!
 void	ConfigParser::checkingFunction(void) {
-	checkDuplicateServer();
+	//checkDuplicateServer(); there could be the same host:port in different server sections
 	checkDuplicateLocationPath();
 	checkRootAlias();
 	checkErrorPagesPath();

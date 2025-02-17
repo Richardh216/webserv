@@ -183,10 +183,10 @@ void testParseHttpRequest(void) {
 		"POST /api/data HTTP/1.1\r\n"
 		"Host: api.example.com\r\n"
 		"User-Agent: MyTestClient/2.0\r\n"
-		"Content-Type: application/json\r\n"
+		"cOnTEnt-type: application/json\r\n"
 		"Accept: application/json\r\n"
 		"Authorization: Bearer abcdef123456\r\n"
-		"Content-Length: 53\r\n"
+		"cOnTEnt-lEngtH: 53\r\n"
 		"\r\n"
 		"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 

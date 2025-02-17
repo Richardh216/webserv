@@ -29,3 +29,28 @@ void	initStatusCodeInfo(std::map<int, std::string>& inf)
 	inf[503] = "Service Unavailable";
 	inf[505] = "HTTP Version Not Supported";
 }
+
+void	initContentTypes(std::map<std::string, std::string>& inf)
+{
+	inf["html"] = "text/html";
+	inf["htm"] = "text/html";
+	inf["css"] = "text/css";
+	inf["xml"] = "text/xml";
+	inf["txt"] = "text/plain";
+	inf["jpg"] = "image/jpeg";
+	inf["jpeg"] = "image/jpeg";
+	inf["png"] = "image/png";
+	inf["gif"] = "image/gif";
+	inf["svg"] = "image/svg+xml";
+	inf["pdf"] = "application/pdf";
+	inf["mp3"] = "audio/mpeg";
+	inf["mp4"] = "video/mp4";
+	inf["webm"] = "video/webm";
+	inf["wav"] = "audio/wav";
+	inf["ogg"] = "audio/ogg";
+	inf["avi"] = "video/x-msvideo";
+	inf["mov"] = "video/quicktime";
+	inf["ico"] = "image/x-icon";
+	inf["tiff"] = "image/tiff";
+	inf["bmp"] = "image/bmp";
+}
