@@ -1,16 +1,33 @@
 #include "../../includes/webserv.hpp"
 
+/*
+TODO
+
+//request header fix for parser
+
+1.	(done) HTTP requests should allow \n too for the new lines insted of \r\n
+
+2. (done) create a headersParsed bool
+
+3. (done) add one pollfd struct to each request struct
+
+4. fix chunked transer encoding
+*/
+
 HttpRequest	parseHttpRequest(int clientFd) {
 	constexpr size_t	BUFFER_SIZE = 4096;
 	std::vector<char>	buffer(BUFFER_SIZE);
 	std::string			rawRequest;
 	ssize_t				bytesRead;
+	HttpRequest			request;
 
+	// std::cout << "PARSER CALLED" << std::endl;
+	request.poll_fd.fd = clientFd;
 	//Reading request data
 	while (true) {
 		bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 		if (bytesRead < 0) {
-			HttpRequest request;
+			// HttpRequest request;
 			request.isValid = false;
 			request.errorMessage = "Error recieving data.";
 			return request;
@@ -20,22 +37,33 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		rawRequest.append(buffer.data(), bytesRead); // buffer.data() returns a pointer to its first element
 		// If headers are complete and this is not a chunked request, break early.
 		// if (rawRequest.find("\r\n\r\n") != std::string::npos &&
-		// 	rawRequest.find("Transfer-Encoding: chunked") == std::string::npos) {
-		// 		break; // End of headers
+			// rawRequest.find("Transfer-Encoding: chunked") == std::string::npos) {
+				// break; // End of headers
 		// }
+		size_t headerEnd = rawRequest.find("\r\n\r\n");
+		if (headerEnd == std::string::npos) {
+			headerEnd = rawRequest.find("\n\n"); // Support '\n' only requests
+		}
+		if (headerEnd != std::string::npos) {
+			request.headersParsed = true;
+			break;
+		}
 	}
+	// std::cout << "HeadersParsed BOOL: " << request.headersParsed << std::endl;
 
 	// if no data was read, return invalid request
 	if (rawRequest.empty()) {
-		HttpRequest request;
+		// HttpRequest request;
 		request.isValid = false;
 		request.errorMessage = "Empty request.";
 		return request;
 	}
 
+	// std::replace(rawRequest.begin(), rawRequest.end(), '\n', '\r\n'); //consider normalizing the endline instead of the convoluted implementation now
+
 	//start parsing from rawReqeust
 	std::istringstream	stream(rawRequest);
-	HttpRequest			request;
+	// HttpRequest			request; //exists already 
 	std::string			line;
 
 	// Read and parse the request line
@@ -43,6 +71,11 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		request.isValid = false;
 		request.errorMessage = "Invalid or empty request line.";
 		return request;
+	}
+
+	// Remove trailing '\r' if it exists
+	if (!line.empty() && line.back() == '\r') {
+		line.pop_back();
 	}
 
 	std::istringstream	lineStream(line); //split the request line into method, path ...
@@ -67,8 +100,17 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		return request;
 	}
 
+	// std::cout << "before reading headers" << std::endl;
 	//read headers
-	while (std::getline(stream, line) && line != "\r") { //Reads each line until "\r", which is the end of headers
+	// while (std::getline(stream, line) && line != "\r") { //Reads each line until "\r", which is the end of headers
+	while (std::getline(stream, line)) { //line != "" makes just \n work
+		if (!line.empty() && line.back() == '\r') { //remove \r if present
+			line.pop_back();
+		}
+		if (line.empty()) {  // Stop when an actual empty line is found
+			break;
+		}
+
 		size_t	colonPos = line.find(':'); //Finds the ":" separator in each header
 		if (colonPos == std::string::npos) {
 			request.isValid = false;
@@ -104,11 +146,14 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 		request.headers[key] = val;
 	}
+	// std::cout << "after reading headers" << std::endl;
 
 	// Check for Content-Length and Chunked Encoding
 	bool	hasContentLength = request.headers.find("Content-Length") != request.headers.end();
 	bool	hasChunkedEncoding = request.headers.find("Transfer-Encoding") != request.headers.end() && 
 								request.headers["Transfer-Encoding"] == "chunked";
+
+	// std::cout << "HASCONTENTLEN BOOL: " << hasContentLength << std::endl;
 
 	if (hasContentLength && hasChunkedEncoding) {
 		request.isValid = false;
@@ -118,6 +163,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	// Handle request body
 	if (hasContentLength) {
+		// std::cout << "GOT TO CONTENT LEN" << std::endl;
 		int	contentLen = std::stoi(request.headers.at("Content-Length")); //converts it to int
 		if (contentLen < 0) {
 			request.isValid = false;
@@ -125,9 +171,23 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			return request;
 		}
 
+		size_t	bodyStart = rawRequest.find("\r\n\r\n"); //start of body
+		if (bodyStart == std::string::npos) {
+			bodyStart = rawRequest.find("\n\n");
+		}
+		if (bodyStart != std::string::npos) {
+			bodyStart += (rawRequest[bodyStart] == '\r') ? 4 : 2; //adjust offset
+			// std::cout << "BODY START: " << bodyStart << std::endl;
+		} else {
+			request.isValid = false;
+			request.errorMessage = "Malformed request: No valid header-body delimiter found.";
+			return request;
+		}
+
 		 // If the entire body wasn't already received with the headers,
 		// continue reading from the socket.
-		while (rawRequest.size() < rawRequest.find("\r\n\r\n") + 4 + static_cast<size_t>(contentLen)) {
+		// while (rawRequest.size() < rawRequest.find("\r\n\r\n") + 4 + static_cast<size_t>(contentLen)) { //old
+		while (rawRequest.size() < bodyStart + static_cast<size_t>(contentLen)) { //new
 			bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 			if (bytesRead <= 0) {
 				request.isValid = false;
@@ -136,7 +196,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			}
 			rawRequest.append(buffer.data(), bytesRead);
 		}
-		size_t	bodyStart = rawRequest.find("\r\n\r\n") + 4; //start of body
+		// std::cout << "HEEERE" << std::endl;
 		request.body = rawRequest.substr(bodyStart, contentLen); //Extracts the body from rawRequest
 	}
 
@@ -144,6 +204,9 @@ HttpRequest	parseHttpRequest(int clientFd) {
 	else if (hasChunkedEncoding) {
 		std::string	chunkedBody;
 		size_t	pos = rawRequest.find("\r\n\r\n"); //find where body begins
+		if (pos == std::string::npos) {
+			pos = rawRequest.find("\n\n", pos); //support \n
+		}
 		if (pos == std::string::npos) {
 			request.isValid = false;
 			request.errorMessage = "Headers not complete.";
@@ -159,7 +222,10 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		while (true) { //breaks when 0\r\n is found
 			// Find the CRLF that ends the chunk size line.
 			size_t	lineEnd = rawRequest.find("\r\n", pos); //search for \r\n starting from pos
-			while (lineEnd == std::string::npos) { //if \r\n is not found, line is incomplete, need more data
+			if (lineEnd == std::string::npos) {
+				lineEnd = rawRequest.find("\n", pos); //support \n
+			}
+			while (lineEnd == std::string::npos) { //if \r\n or \n is not found, line is incomplete, need more data
 				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 				if (bytesRead <= 0) {
 					request.isValid = false;
@@ -168,6 +234,9 @@ HttpRequest	parseHttpRequest(int clientFd) {
 				}
 				rawRequest.append(buffer.data(), bytesRead);
 				lineEnd = rawRequest.find("\r\n", pos); //re-check if \r\n is now available
+				if (lineEnd == std::string::npos) {
+					lineEnd = rawRequest.find("\n", pos); //support \n
+				}
 			}
 			//Extract the chunk size (in hexadecimal)
 			std::string chunkSizeStr = rawRequest.substr(pos, lineEnd - pos); //extracts chunkSize as a string
@@ -214,16 +283,27 @@ void testParseHttpRequest(void) {
 	// 	"0\r\n"
 	// 	"\r\n";
 
-		std::string httpRequest = //content-length
-		"POST /api/data HTTP/1.1\r\n"
-		"Host: api.example.com\r\n"
-		"User-Agent: MyTestClient/2.0\r\n"
-		"cOnTEnt-type: application/json\r\n"
-		"Accept: application/json\r\n"
-		"Authorization: Bearer abcdef123456\r\n"
-		"cOnTEnt-lEngtH: 53\r\n"
-		"\r\n"
+	std::string httpRequest = // just \n instead of \r\n test
+		"POST /api/data HTTP/1.1\n"
+		"Host: api.example.com\n"
+		"User-Agent: MyTestClient/2.0\n"
+		"cOnTEnt-type: application/json\n"
+		"Accept: application/json\n"
+		"Authorization: Bearer abcdef123456\n"
+		"cOnTEnt-lEngtH: 53\n"
+		"\n"
 		"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
+
+	// std::string httpRequest = //content-length
+		// "POST /api/data HTTP/1.1\r\n"
+		// "Host: api.example.com\r\n"
+		// "User-Agent: MyTestClient/2.0\r\n"
+		// "cOnTEnt-type: application/json\r\n"
+		// "Accept: application/json\r\n"
+		// "Authorization: Bearer abcdef123456\r\n"
+		// "cOnTEnt-lEngtH: 53\r\n"
+		// "\r\n"
+		// "{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 
 	// std::string httpRequest =
 	// 	"GET /index.html HTTP/1.1\r\n"
@@ -250,6 +330,7 @@ void testParseHttpRequest(void) {
 	HttpRequest request = parseHttpRequest(sv[0]);
 		
 	// Output parsed results.
+	std::cout << "\npoll_fd: " << request.poll_fd.fd << "\n";
 	std::cout << "\nMethod: " << request.method << "\n";
 	std::cout << "Path: " << request.path << "\n";
 	std::cout << "HTTP Version: " << request.httpVersion << "\n";

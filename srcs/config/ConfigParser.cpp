@@ -9,24 +9,18 @@
 //check incoherent values for hostname and so on
 
 /*
-to do: 
-DONE: 1. we can not have more than 1 location for the same path
-	location /images {...}
-	location /images {...} -> error: /images are the same path
+TODO: 
 
-DONE 2. we can not have more than 1 root or alias directives in the same location or server sections
+1. if there are 2 or more locations with root and alias it
+throws and error in cofing file
 
-DONE 3. we can not have alias and root directives in the same location section
+2. throw error on random values on config file
 
-DONE 4. delete every location with a path that is not started with /
-(./images, images, images/) -> delete them only after checking the 1-3 rules
+3. serers can't have the same name, but can have the same port
+(do it in dupcheckserver, check for name)
 
-(implemented) because Nginx will still print an error message for the 1-3 cases, but will ignore
-these locations if they are not starting from /
-
-DONE error_page directive path should also start from /
-
-(works this way) it is not necessary to start path with / for the root and alias
+4. use client_max_body_size directive from the config file
+when saving the body, if not specified use default value
 
 */
 
