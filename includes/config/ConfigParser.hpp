@@ -27,4 +27,5 @@ class	ConfigParser {
 		void	checkErrorPagesPath(void);
 		void	removeInvalidLocationPath(void);
 		void	checkingFunction();
+		bool	hasForbiddenChar(const std::string &val);
 };
