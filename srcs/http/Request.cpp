@@ -3,7 +3,8 @@
 /*
 TODO
 
-//request header fix for parser
+// check chunked transfer with just \n instead of \r\n
+NOT WORKING, only with contentlen
 
 1.	(done) HTTP requests should allow \n too for the new lines insted of \r\n
 
@@ -11,7 +12,8 @@ TODO
 
 3. (done) add one pollfd struct to each request struct
 
-4. fix chunked transer encoding
+4. (done) fix chunked transer encoding
+5. NEW ISSUE, Fix chunked encoding to work with |n only 
 */
 
 HttpRequest	parseHttpRequest(int clientFd) {
@@ -202,6 +204,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	// Handle chunked transfer encoding
 	else if (hasChunkedEncoding) {
+		std::cout << "Chunked Encoding FOUND!" << std::endl;
 		std::string	chunkedBody;
 		size_t	pos = rawRequest.find("\r\n\r\n"); //find where body begins
 		if (pos == std::string::npos) {
@@ -212,42 +215,128 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			request.errorMessage = "Headers not complete.";
 			return request;
 		}
-		pos += 4; //skip the header delim
+		pos += (rawRequest.compare(pos, 4, "\r\n\r\n") == 0) ? 4 : 2; //skip the header delim
 
 		// Skip any extra CRLFs that may be present after the header delimiter.
-		while (rawRequest.compare(pos, 2, "\r\n") == 0) {
-			pos += 2;
+		// while (rawRequest.compare(pos, 2, "\r\n") == 0) {
+		// 	pos += 2;
+		// }
+
+		// while (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n') {
+		// 	pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
+		// }
+
+
+
+		// while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
+		// 		pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
+		// 	}
+
+		while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
+			pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
 		}
+
 
 		while (true) { //breaks when 0\r\n is found
 			// Find the CRLF that ends the chunk size line.
-			size_t	lineEnd = rawRequest.find("\r\n", pos); //search for \r\n starting from pos
+			// size_t	lineEnd = rawRequest.find("\r\n", pos); //search for \r\n starting from pos
+			// if (lineEnd == std::string::npos) {
+			// 	lineEnd = rawRequest.find("\n", pos); //support \n
+			// }
+			size_t	lineEnd = rawRequest.find_first_of("\r\n", pos);
 			if (lineEnd == std::string::npos) {
-				lineEnd = rawRequest.find("\n", pos); //support \n
+				std::cout << "ERROR: No end-of-line found for chunk size." << std::endl;
+				request.isValid = false;
+				request.errorMessage = "Malformed chunk size line.";
+				return request;
 			}
-			while (lineEnd == std::string::npos) { //if \r\n or \n is not found, line is incomplete, need more data
-				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
-				if (bytesRead <= 0) {
-					request.isValid = false;
-					request.errorMessage = "Incomplete chunked transfer encoding: missing chunk size line.";
-					return request;
+			size_t	delimLen = (rawRequest.substr(lineEnd, 2) == "\r\n") ? 2 : 1;
+			// if ((lineEnd = rawRequest.find("\r\n", pos)) != std::string::npos) {
+			// 	delimLen = 2;
+			// } else if ((lineEnd = rawRequest.find("\n", pos)) != std::string::npos) {
+			// 	delimLen = 1;
+			// } else {
+				while (lineEnd == std::string::npos) { //if \r\n or \n is not found, line is incomplete, need more data
+					bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
+					if (bytesRead <= 0) {
+						request.isValid = false;
+						request.errorMessage = "Incomplete chunked transfer encoding: missing chunk size line.";
+						return request;
+					}
+					rawRequest.append(buffer.data(), bytesRead);
+					if ((lineEnd = rawRequest.find("\r\n", pos)) != std::string::npos) {
+						delimLen = 2;
+					} else if ((lineEnd = rawRequest.find("\n", pos)) != std::string::npos) {
+						delimLen = 1;
+					}
+					// lineEnd = rawRequest.find("\r\n", pos); //re-check if \r\n is now available
+					// if (lineEnd == std::string::npos) {
+					// 	lineEnd = rawRequest.find("\n", pos); //support \n
+					// }
 				}
-				rawRequest.append(buffer.data(), bytesRead);
-				lineEnd = rawRequest.find("\r\n", pos); //re-check if \r\n is now available
-				if (lineEnd == std::string::npos) {
-					lineEnd = rawRequest.find("\n", pos); //support \n
-				}
-			}
-			//Extract the chunk size (in hexadecimal)
-			std::string chunkSizeStr = rawRequest.substr(pos, lineEnd - pos); //extracts chunkSize as a string
-			int	chunkSize;
-			std::istringstream	iss(chunkSizeStr);
-			iss >> std::hex >> chunkSize; //converts hex chunkSize into int
-			if (chunkSize == 0) { //the last chunk was received, end of the loop
-				break;
+			// } else bracket
+
+			// Move past any stray newlines before parsing chunk size
+			// while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
+			// 	pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
+			// }
+
+			while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
+				pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
 			}
 
-			size_t chunkDataStart = lineEnd + 2; //Move past the chunk size line (and its CRLF)
+
+			//Extract the chunk size (in hexadecimal)
+			std::cout << "DEBUG: pos = " << pos << ", lineEnd = " << lineEnd << std::endl;
+			std::cout << "DEBUG: Extracting chunk size from: [" << rawRequest.substr(pos, lineEnd - pos) << "]" << std::endl;
+
+			if (lineEnd <= pos) {
+				std::cout << "ERROR: lineEnd is not correctly positioned! lineEnd = " << lineEnd << ", pos = " << pos << std::endl;
+				request.isValid = false;
+				request.errorMessage = "Malformed chunk size line.";
+				return request;
+			}
+
+			// std::cout << "RAW REQUEST: " << rawRequest << std::endl;
+			std::cout << "DEBUG: Full chunk size line: [" << rawRequest.substr(pos, lineEnd - pos) << "]" << std::endl;
+
+			// std::string chunkSizeStr = rawRequest.substr(pos, lineEnd - pos); //extracts chunkSize as a string
+
+			std::string	chunkSizeStr;
+			if (lineEnd > pos) {  // Ensure valid range
+				chunkSizeStr = rawRequest.substr(pos, lineEnd - pos);
+			} else {
+				std::cout << "ERROR: Invalid chunk size extraction. pos = " << pos << ", lineEnd = " << lineEnd << std::endl;
+				request.isValid = false;
+				request.errorMessage = "Invalid chunk size format.";
+				return request;
+			}
+
+
+			std::cout << "CHUNKSIZE STR: " << chunkSizeStr << std::endl;
+			chunkSizeStr.erase(0, chunkSizeStr.find_first_not_of(" \t"));
+			chunkSizeStr.erase(chunkSizeStr.find_last_not_of(" \t") + 1);
+
+			// int	chunkSize;
+			// std::istringstream	iss(chunkSizeStr);
+			// iss >> std::hex >> chunkSize; //converts hex chunkSize into int
+
+			int chunkSize;
+			try {
+				chunkSize = std::stoul(chunkSizeStr, nullptr, 16); // Convert hex to int
+			} catch (const std::exception& e) {
+				std::cout << "Error converting chunk size: " << e.what() << std::endl;
+				request.isValid = false;
+				request.errorMessage = "Invalid chunk size.";
+				return request;
+			}
+
+			if (chunkSize == 0) { //the last chunk was received, end of the loop
+				std::cout << "End of chunks detected." << std::endl;
+				break;
+			}
+			std::cout << "MOVED PAST HEX" << std::endl;
+			size_t chunkDataStart = lineEnd + delimLen; //Move past the chunk size line (and its CRLF)
 			// Ensure the entire chunk and its trailing CRLF are available
 			while (rawRequest.size() < chunkDataStart + chunkSize + 2) { //If rawRequest is too short, call recv() to read more data from the socket
 				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
@@ -258,8 +347,27 @@ HttpRequest	parseHttpRequest(int clientFd) {
 				}
 				rawRequest.append(buffer.data(), bytesRead);
 			}
+
+			std::cout << "Received chunk size: " << chunkSize << std::endl;
+			std::cout << "Chunk data: [" << rawRequest.substr(chunkDataStart, chunkSize) << "]" << std::endl;
 			chunkedBody.append(rawRequest.substr(chunkDataStart, chunkSize)); // Append the chunk data to the chunkBody
-			pos = chunkDataStart + chunkSize + 2; // Advance the pointer past the chunk data and the trailing CRLF
+
+			//advance pointer past chunked data
+			pos = chunkDataStart + chunkSize;
+
+			if (pos < rawRequest.size() && rawRequest.compare(pos, 2, "\r\n") == 0) {
+				pos += 2;
+			} else if (pos < rawRequest.size() && rawRequest[pos] == '\n') {
+				pos += 1;
+			}
+			std::cout << "Updated pos after chunk: " << pos << std::endl;
+			std::cout << "Next data in buffer: [" << rawRequest.substr(pos, 10) << "]" << std::endl;
+
+			// if (chunkSize > 0) {
+			// 	pos = chunkDataStart + chunkSize; // Advance the pointer past the chunk data and the trailing CRLF
+			// 	if (rawRequest.compare(pos, 2, "\r\n") == 0) pos += 2;
+			// 	else if (rawRequest[pos] == '\n') pos += 1;
+			// }
 		}
 		request.body = chunkedBody; //store full body
 	}
@@ -267,6 +375,75 @@ HttpRequest	parseHttpRequest(int clientFd) {
 }
 
 void testParseHttpRequest(void) {
+
+	std::string httpRequest = //chunked complex normal
+		"POST /api/data HTTP/1.1\r\n"
+		"Host: example.com\r\n"
+		"User-Agent: ChunkedClient/1.0\r\n"
+		"Content-Type: application/json\r\n"
+		"Transfer-Encoding: chunked\r\n"
+		"\r\n"
+		"4\r\n"
+		"{\"na\r\n"
+		"6\r\n"
+		"me\": \"\r\n"
+		"6\r\n"
+		"John D\r\n"
+		"4\r\n"
+		"oe\",\r\n"
+		"3\r\n"
+		"\"em\r\n"
+		"5\r\n"
+		"ail\":\r\n"
+		"5\r\n"
+		"\"john\r\n"
+		"6\r\n"
+		".doe@r\n"
+		"7\r\n"
+		"example\r\n"
+		"6\r\n"
+		".com\",\r\n"
+		"3\r\n"
+		"\"ag\r\n"
+		"6\r\n"
+		"e\": 3}\r\n"
+		"0\r\n"
+		"\r\n";
+
+	// std::string httpRequest = //chunked complex just \n
+	// 	"POST /api/data HTTP/1.1\n"
+	// 	"Host: example.com\n"
+	// 	"User-Agent: ChunkedClient/1.0\n"
+	// 	"Content-Type: application/json\n"
+	// 	"Transfer-Encoding: chunked\n"
+	// 	"\n"
+	// 	"4\n"
+	// 	"{\"na\n"
+	// 	"6\n"
+	// 	"me\": \"\n"
+	// 	"6\n"
+	// 	"John D\n"
+	// 	"4\n"
+	// 	"oe\",\n"
+	// 	"3\n"
+	// 	"\"em\n"
+	// 	"5\n"
+	// 	"ail\":\n"
+	// 	"5\n"
+	// 	"\"john\n"
+	// 	"6\n"
+	// 	".doe@r\n"
+	// 	"7\n"
+	// 	"example\n"
+	// 	"6\n"
+	// 	".com\",\n"
+	// 	"3\n"
+	// 	"\"ag\n"
+	// 	"6\n"
+	// 	"e\": 3}\n"
+	// 	"0\n"
+	// 	"\n";
+
 
 	// std::string httpRequest = //chunked transfer encoding
 	// 	"POST /api/data HTTP/1.1\r\n"
@@ -283,27 +460,27 @@ void testParseHttpRequest(void) {
 	// 	"0\r\n"
 	// 	"\r\n";
 
-	std::string httpRequest = // just \n instead of \r\n test
-		"POST /api/data HTTP/1.1\n"
-		"Host: api.example.com\n"
-		"User-Agent: MyTestClient/2.0\n"
-		"cOnTEnt-type: application/json\n"
-		"Accept: application/json\n"
-		"Authorization: Bearer abcdef123456\n"
-		"cOnTEnt-lEngtH: 53\n"
-		"\n"
-		"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
+	// std::string httpRequest = // just \n instead of \r\n test
+	// 	"POST /api/data HTTP/1.1\n"
+	// 	"Host: api.example.com\n"
+	// 	"User-Agent: MyTestClient/2.0\n"
+	// 	"cOnTEnt-type: application/json\n"
+	// 	"Accept: application/json\n"
+	// 	"Authorization: Bearer abcdef123456\n"
+	// 	"cOnTEnt-lEngtH: 53\n"
+	// 	"\n"
+	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 
 	// std::string httpRequest = //content-length
-		// "POST /api/data HTTP/1.1\r\n"
-		// "Host: api.example.com\r\n"
-		// "User-Agent: MyTestClient/2.0\r\n"
-		// "cOnTEnt-type: application/json\r\n"
-		// "Accept: application/json\r\n"
-		// "Authorization: Bearer abcdef123456\r\n"
-		// "cOnTEnt-lEngtH: 53\r\n"
-		// "\r\n"
-		// "{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
+	// 	"POST /api/data HTTP/1.1\r\n"
+	// 	"Host: api.example.com\r\n"
+	// 	"User-Agent: MyTestClient/2.0\r\n"
+	// 	"cOnTEnt-type: application/json\r\n"
+	// 	"Accept: application/json\r\n"
+	// 	"Authorization: Bearer abcdef123456\r\n"
+	// 	"cOnTEnt-lEngtH: 53\r\n"
+	// 	"\r\n"
+	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 
 	// std::string httpRequest =
 	// 	"GET /index.html HTTP/1.1\r\n"
