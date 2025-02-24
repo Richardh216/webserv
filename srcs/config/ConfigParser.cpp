@@ -15,8 +15,10 @@ TODO:
 throws and error in cofing file
 
 2. throw error on random values on config file
+	- create generic checker for invalid chars
+	- create a seperate checker for each directive 
 
-3. serers can't have the same name, but can have the same port
+(done) 3. serers can't have the same name, but can have the same port
 (do it in dupcheckserver, check for name)
 
 4. use client_max_body_size directive from the config file
@@ -179,15 +181,6 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 	file.close();
 }
 
-void	ConfigParser::checkDuplicateServer(void) {
-	for (size_t i = 0; i < servers.size(); i++) {
-		for (size_t j = i + 1; j < servers.size(); j++) {
-			if ((servers[i].host == servers[j].host) && (servers[i].port == servers[j].port)) {
-				throw std::runtime_error("Duplicate Server Configuration Found: Same Host and Same Port on multiple Servers!");
-			}
-		}
-	}
-}
 
 void	ConfigParser::checkDuplicateLocationPath(void) { //check for duplicate location paths
 	for (auto &server : servers) {
@@ -197,6 +190,31 @@ void	ConfigParser::checkDuplicateLocationPath(void) { //check for duplicate loca
 				throw std::runtime_error("Duplicate Location Path Found: " + route.path);
 			}
 			paths.insert(route.path);
+		}
+	}
+}
+
+//old
+// void	ConfigParser::checkDuplicateServer(void) {
+// 	for (size_t i = 0; i < servers.size(); i++) {
+// 		for (size_t j = i + 1; j < servers.size(); j++) {
+// 			if ((servers[i].host == servers[j].host) && (servers[i].port == servers[j].port)) {
+// 				throw std::runtime_error("Duplicate Server Configuration Found: Same Host and Same Port on multiple Servers!");
+// 			}
+// 		}
+// 	}
+// }
+
+//new, just cheks name
+void	ConfigParser::checkDuplicateServer(void) {
+	std::set<std::string>	seenNames;
+
+	for (size_t i = 0; i < servers.size(); i++) {
+		for (const std::string &name : servers[i].serverNames) {
+			if (seenNames.find(name) != seenNames.end()) {
+				throw std::runtime_error("Duplicate Server Configuration Found: Same server name on multiple Servers!");
+			}
+			seenNames.insert(name);
 		}
 	}
 }
@@ -263,7 +281,7 @@ void	ConfigParser::removeInvalidLocationPath() { //creates a new list of routes 
 
 //play around with config file to test!
 void	ConfigParser::checkingFunction(void) {
-	//checkDuplicateServer(); there could be the same host:port in different server sections
+	checkDuplicateServer(); //name check
 	checkDuplicateLocationPath();
 	checkRootAlias();
 	checkErrorPagesPath();
