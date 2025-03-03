@@ -15,6 +15,7 @@ NOT WORKING, only with contentlen
 4. (done) fix chunked transer encoding
 5. NEW ISSUE, Fix chunked encoding to work with |n only 
 
+match socket to server and get client_max_body_size from there
 6. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
 */

@@ -11,9 +11,7 @@
 /*
 TODO: 
 
-1. if there are 2 or more locations with root and alias it
-throws and error in cofing file
-
+Fixed for random values, but not checking the parsed values
 2. throw error on random values on config file
 	- create generic checker for invalid chars
 	- create a seperate checker for each directive
@@ -148,6 +146,8 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 				insideRoute = true;
 				currentRoute = Route();
 				currentRoute.path = getLocationPath(line);
+			} else if (!insideRoute) {
+				throw std::runtime_error("Incoherent values in Server in Config File: " + line);
 			} else if (insideRoute) {
 				if (line.find("root") == 0) { //dir serving files
 					if (!currentRoute.root.empty()) {
@@ -178,8 +178,12 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 						throw std::runtime_error("Location path " + currentRoute.path + " has multiple alias directives.");
 					}
 					currentRoute.alias = trim(getValue(line));
+				} else { // check inside route
+					throw std::runtime_error("Incoherent values in Route in Config File: " + line);
 				}
 			}
+		} else { //check for outside of server & root values
+			throw std::runtime_error("Incoherent values outside of Server in Config File: " + line);
 		}
 	}
 	file.close();
