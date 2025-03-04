@@ -25,8 +25,7 @@ struct serverConfig {
 	std::string	host;
 	std::vector<std::string>	serverNames;
 	std::map<int, std::string>	errorPages;
-	// int	client_max_body_size = 0;
-	int	client_max_body_size = -1;
+	int	client_max_body_size = 0;// may want it at -1
 	std::string		root;
 	std::vector<Route> routes;
 	struct sockaddr_in	bind_addr; // for Sockets::bindSocket()

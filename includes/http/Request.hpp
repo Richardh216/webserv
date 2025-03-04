@@ -7,8 +7,8 @@
 #include <string>
 #include <regex>
 #include <set>
-
 #include <poll.h>
+
 struct HttpRequest {
 	std::string	method;
 	std::string	path;

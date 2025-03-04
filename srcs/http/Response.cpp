@@ -66,25 +66,33 @@ void	Response::formResponse(const HttpRequest& request, const Webserv& webserv)
 	if (this->choosed_server == nullptr) return;
 
 	this->http_version = "HTTP/1.1";
-	addHeader("Date", takeGMTTime());
+
+	std::string	time = takeGMTTime();
+	if (!time.empty()) addHeader("Date", time);
+
 	addHeader("Server", "webserv/0.01");
 	addHeader("Connection", "close");
 
 	findRouteInConfig(request.path);
+	if (choosed_route && !choosed_route->redirection.empty()) {
+		redirect(webserv);
+		return;
+	}
+
 	std::string full_path = findFullPath(request.path);
 	if (full_path.empty() || !std::filesystem::exists(full_path)) {
-		formError(404, webserv.status_code_info.at(404));
+		formError(404, webserv);
 	}
 	else {
-		if (request.method == "GET") {
+		if (request.method == "GET" && isMethodAllowed(request.method)) {
 			handleGET(full_path, webserv);
 		}
-		else if (request.method == "POST") {
+		else if (request.method == "POST" && isMethodAllowed(request.method)) {
 		}
-		else if (request.method == "DELETE") {
+		else if (request.method == "DELETE" && isMethodAllowed(request.method)) {
 		}
 		else {
-			formError(405, webserv.status_code_info.at(405));
+			formError(405, webserv);
 		}
 	}
 }
@@ -121,7 +129,7 @@ void	Response::handleGET(std::string& full_path, const Webserv& webserv)
 	else if (std::filesystem::is_regular_file(full_path))
 		serveFile(full_path, webserv);
 	else
-		formError(403, webserv.status_code_info.at(403));
+		formError(403, webserv);
 }
 
 void	Response::handleDirRequest(std::string& full_path, const Webserv& webserv)
@@ -137,10 +145,10 @@ void	Response::handleDirRequest(std::string& full_path, const Webserv& webserv)
 	}
 	else {
 		if (choosed_route && choosed_route->autoindex) {
-			//this->body = generateAutoindexHTML(full_path);
+			generateAutoindexHTML(full_path, webserv);
 		}
 		else {
-			formError(403, webserv.status_code_info.at(403));
+			formError(403, webserv);
 		}
 	}
 }
@@ -151,14 +159,16 @@ void	Response::serveFile(const std::string& full_path, const Webserv& webserv)
 		this->status_code = "200";
 		this->reason_phrase = webserv.status_code_info.at(200);
 		addHeader("Content-Length", std::to_string(this->body.size()));
-		//choose file extension ?
+
+		std::string type = checkContentType(full_path, webserv);
+		if (!type.empty()) addHeader("Content-Type", type); // + "; charset=utf-8" ?
 	}
 	else {
-		formError(404, webserv.status_code_info.at(404));
+		formError(404, webserv);
 	}
 }
 
-void	Response::formError(int code, const std::string& error_message)
+void	Response::formError(int code, const Webserv& webserv)
 {
 	std::string error_file_path = "./website/errors/" + std::to_string(code) + ".html";
 
@@ -175,12 +185,17 @@ void	Response::formError(int code, const std::string& error_message)
 	}
 
 	this->status_code = std::to_string(code);
-	this->reason_phrase = error_message;
-	if (!addBody(error_file_path, true))
+	this->reason_phrase = webserv.status_code_info.at(code);
+	if (!addBody(error_file_path, true)) {
 		this->body = "<html><body><h1>" + status_code + " "
 			+ reason_phrase + "</h1></body></html>";
-	addHeader("Content-Type", "text/html");
-	//or search an extension of a file and add
+		addHeader("Content-Type", "text/html");
+	}
+	else {
+		std::string type = checkContentType(error_file_path, webserv);
+		if (!type.empty()) addHeader("Content-Type", type); // + "; charset=utf-8" ?
+	}
+
 	addHeader("Content-Length", std::to_string(this->body.size()));
 }
 
@@ -230,17 +245,126 @@ std::string Response::takeGMTTime()
 	std::vector<char> buff(100);
 
 	std::size_t size = std::strftime(buff.data(), buff.size(), format, std::gmtime(&t));
-
-	return (size > 0) ? std::string(buff.data()) : "failed to check";
+	return (size > 0) ? std::string(buff.data()) : "";
 }
 
 std::string	Response::checkContentType(std::string file, const Webserv& webserv)
 {
-	/**
-	 * file : ./website/inages/favicon.png
-	 */
-	(void)file;
-	(void)webserv;
+	std::string extension = std::filesystem::path(file).extension().string();
 
-	return "";
+	const auto& it = webserv.content_types.find(extension);
+	return (it != webserv.content_types.end() ? it->second : "");
+}
+
+bool	Response::isMethodAllowed(const std::string& method)
+{
+	/**
+	 * GET & POST are enabled by default
+	 */
+	if (!choosed_route || choosed_route->allowedMethods.empty()) {
+		return (method == "GET" || method == "POST");
+	}
+
+	const auto& it = std::find(choosed_route->allowedMethods.begin(),
+		choosed_route->allowedMethods.end(), method);
+	return (it != choosed_route->allowedMethods.end());
+}
+
+void	Response::redirect(const Webserv& webserv)
+{
+	const auto& redir_inf = choosed_route->redirection.begin();
+
+	const auto& code_info = webserv.status_code_info.find(redir_inf->first);
+	if (code_info == webserv.status_code_info.end()) {
+		formError(500, webserv);
+		return;
+	}
+
+	this->status_code = code_info->first;
+	this->reason_phrase = code_info->second;
+	addHeader("Location", redir_inf->second);
+}
+
+void	Response::generateAutoindexHTML(const std::string& full_path, const Webserv& webserv)
+{
+	std::string tmp_path = full_path;
+	if (!tmp_path.empty() && tmp_path.back() == '/') tmp_path.pop_back();
+
+	std::string main_dir = std::filesystem::path(tmp_path).filename().string();
+	if (!main_dir.empty()) main_dir += "/";
+
+	std::cout << "\n\nfull_path: " << full_path << "\n";
+	std::cout << "main_dir: " << main_dir << "\n\n";
+
+	body = R"(
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Index of )" + main_dir + R"(</title>
+		<style>
+			body {font-family: Arial, sans-serif;
+				background: linear-gradient(120deg,#141E30,#243B55);
+				color: white;height: 100vh;display: flex;
+				flex-direction: column;align-items: center; }
+			a{color:#007BFF;text-decoration: none;} a:hover {color:#0056b3;}
+			.container {min-width: 400px;}
+			.entry {display: flex;padding: 5px 0;
+				border-bottom: 1px solid rgba(255, 255, 255, 0.2);}
+			.name {width: 250px;text-align: left;}
+			.date {width: 150px;text-align: left;}
+			.size {width: 100px;text-align: right;}}
+		</style>
+	</head><body><h2>Index of )" + main_dir + R"(</h2><div class="container">)";
+
+	std::filesystem::path dir_path(full_path);
+	if (dir_path.has_parent_path()) // exclude going out of the root (correct ?)
+		body += R"(<a href="../">../</a>)";
+
+	try {
+
+		for (const auto& entry : std::filesystem::directory_iterator(dir_path)) {
+
+			std::string filename = entry.path().filename().string();
+			if (entry.is_directory()) filename += "/";
+
+			std::string file_size = (entry.is_directory() ? "-"
+				: std::to_string(entry.file_size()));
+
+			std::string date = checkLastWriteTime(entry.path().c_str());
+
+			body += "<div class=\"entry\"><a class=\"name\" href=\""
+				+ filename + "\">" + filename + "</a><span class=\"date\">"
+				 + date + "</span><span class=\"size\">" + file_size + "</span></div>";
+		}
+	}
+	catch(...) {
+		formError(500, webserv);
+		return;
+	}
+
+	body += "</div></body></html>";
+
+	this->status_code = "200";
+	this->reason_phrase = webserv.status_code_info.at(200);
+	addHeader("Content-Type", "text/html");
+	addHeader("Content-Length", std::to_string(this->body.size()));
+}
+
+std::string Response::checkLastWriteTime(const char *path)
+{
+	std::string mod_time = "";
+	struct stat fileStat;
+
+	if (stat(path, &fileStat) == 0) {
+		time_t t = fileStat.st_mtime;
+		const char format[] = "%d-%b-%Y %H:%M";
+		char buff[50];
+
+		std::size_t size = std::strftime(buff, sizeof(buff),
+			format, std::gmtime(&t));
+		if (size > 0) mod_time = std::string(buff);
+	}
+	return mod_time;
 }

@@ -2,6 +2,7 @@
 #define RESPONSE_HPP
 
 #include <ctime>
+#include <sys/stat.h>
 
 struct Webserv;
 struct HttpRequest;
@@ -21,15 +22,19 @@ class Response
 
 		void	addHeader(const std::string& name, const std::string& value);
 		bool	addBody(const std::string& file_path, bool is_bin);
-		void	formError(int code, const std::string& error_message);
+		void	formError(int code, const Webserv& webserv);
 		void	findRouteInConfig(const std::string& request_path);
 		void	handleGET(std::string& full_path, const Webserv& webserv);
 		void	handleDirRequest(std::string& full_path, const Webserv& webserv);
 		void	serveFile(const std::string& full_path, const Webserv& webserv);
+		bool	isMethodAllowed(const std::string& method);
+		void	redirect(const Webserv& webserv);
+		void	generateAutoindexHTML(const std::string& full_path, const Webserv& webserv);
 
 		std::string	findFullPath(const std::string& request_path);
 		std::string	checkContentType(std::string file, const Webserv& webserv);
 		std::string takeGMTTime();
+		std::string checkLastWriteTime(const char *path);
 
 	public:
 		void	testInitRequest(HttpRequest& request);
