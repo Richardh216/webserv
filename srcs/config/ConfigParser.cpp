@@ -1,23 +1,14 @@
 #include "../../includes/webserv.hpp"
 
-// check for error codes in nginx
-
-//5 nginx behavior for duplicate directives in the same location or server section in config file
-
-//same port multiple times should not work, same IP and port on multiple servers should throw error, host:port chcek
-//check if common ports work 
-//check incoherent values for hostname and so on
-
 /*
 TODO: 
 
-Fixed for random values, but not checking the parsed values
-2. throw error on random values on config file
-	- create generic checker for invalid chars
-	- create a seperate checker for each directive
+1. (done) fix multiple root error in server, throws errors even if it's in seperate locaions
+
+2. (done) throw error on random values on config file
+(may want to implement parsed value checking)
 
 (done) 3. serers can't have the same name, but can have the same port
-(do it in dupcheckserver, check for name)
 
 4. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
@@ -103,10 +94,6 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 	while (std::getline(file, line)) {
 		line = trim(line);
 		if (line.empty() || line[0] == '#') continue; //skip comments and empty lines
-
-		if (hasForbiddenChar(line)) {
-			throw std::runtime_error("Forbidden Character Found!");
-		}
 
 		if (line == "server {") {
 			insideServer = true;
@@ -202,17 +189,6 @@ void	ConfigParser::checkDuplicateLocationPath(void) { //check for duplicate loca
 	}
 }
 
-//old
-// void	ConfigParser::checkDuplicateServer(void) {
-// 	for (size_t i = 0; i < servers.size(); i++) {
-// 		for (size_t j = i + 1; j < servers.size(); j++) {
-// 			if ((servers[i].host == servers[j].host) && (servers[i].port == servers[j].port)) {
-// 				throw std::runtime_error("Duplicate Server Configuration Found: Same Host and Same Port on multiple Servers!");
-// 			}
-// 		}
-// 	}
-// }
-
 //new, just cheks name
 void	ConfigParser::checkDuplicateServer(void) {
 	std::set<std::string>	seenNames;
@@ -229,9 +205,6 @@ void	ConfigParser::checkDuplicateServer(void) {
 
 void	ConfigParser::checkRootAlias(void) { //some checks happen in parsing before
 	for (auto &server : servers) {
-		bool	hasRoot = false;
-		bool	hasAlias = false;
-
 		for (auto & route : server.routes) {
 			int	rootCount = (route.root.empty() ? 0 : 1); //1 if root exists, 0 if not
 			int	aliasCount = (route.alias.empty() ? 0 : 1); //1 if alias exists, 0 if not
@@ -242,18 +215,13 @@ void	ConfigParser::checkRootAlias(void) { //some checks happen in parsing before
 			}
 
 			//check for duplicate Server root
-			if (!route.root.empty()) {
-				if (hasRoot) {
-					throw std::runtime_error("Server contains multiple root directives.");
-				}
-				hasRoot = true;
+			if (rootCount > 1) {
+				throw std::runtime_error("Location path " + route.path + " contains multiple root directives.");
 			}
+
 			//check for duplicate Server alias
-			if (!route.alias.empty()) {
-				if (hasAlias) {
-					throw std::runtime_error("Server contains multiple alias directives.");
-				}
-				hasAlias = true;
+			if (aliasCount > 1) {
+				throw std::runtime_error("Location path " + route.path + " contains multiple alias directives.");
 			}
 		}
 	}
@@ -294,28 +262,6 @@ void	ConfigParser::checkingFunction(void) {
 	checkRootAlias();
 	checkErrorPagesPath();
 	removeInvalidLocationPath();
-}
-
-bool	ConfigParser::hasForbiddenChar(const std::string &val) {
-	std::string	forbiddenChars = "=<>\"'\\`"; //throws errors in comments too (removed ' from config file)
-
-	for (size_t i = 0; i < val.size(); ++i) {
-		char c = val[i];
-
-		// if (c == '#') { // could implement looping for this
-		// 	break;
-		// }
-
-		if (forbiddenChars.find(c) != std::string::npos || iscntrl(c)) {
-			std::cout << "forbidden char: " << c << std::endl;
-			return true; //forbidden char found
-		}
-
-		// if (c == ';' && i != val.size() - 1) {
-		// 	return true; //semicolon not at the end
-		// }
-	}
-	return false; //no issues found
 }
 
 void	ConfigParser::tester(const std::string &inFile) {

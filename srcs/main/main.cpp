@@ -13,11 +13,11 @@ int	main(int argc, char **argv)
 	initContentTypes(webserv.content_types);
 
 	try {
-		parser.tester(webserv.config_path); //for printing (has checking call inside)
-		// parser.parseConfigFile(webserv.config_path); //no prints, needs checking called after
-		// parser.checkingFunction();
+		// parser.tester(webserv.config_path); //for printing (has checking call inside)
+		parser.parseConfigFile(webserv.config_path); //no prints, needs checking called after
+		parser.checkingFunction();
 
-		// testParseHttpRequest(); //prints the tests for HTTP parsing, it now uses sokcets and file descriptor instead of rawString
+		testParseHttpRequest(); //prints the tests for HTTP parsing, it now uses sokcets and file descriptor instead of rawString
 
 		server_sockets.initSockets(parser.servers);
 		poller.initPoll(server_sockets.server_fds);
