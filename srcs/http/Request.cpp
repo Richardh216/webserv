@@ -16,6 +16,8 @@ TODO
 match socket to server and get client_max_body_size from there
 6. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
+
+7. check what error to throw and how to handle client_max_body_size once recieved via function call
 */
 
 HttpRequest	parseHttpRequest(int clientFd) {
