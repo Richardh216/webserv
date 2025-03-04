@@ -54,8 +54,6 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		return request;
 	}
 
-	//consider normalizing the endline instead of the convoluted implementation now
-
 	//start parsing from rawReqeust
 	std::istringstream	stream(rawRequest);
 	std::string			line;
@@ -152,11 +150,21 @@ HttpRequest	parseHttpRequest(int clientFd) {
 
 	// Handle request body
 	if (hasContentLength) {
-		// std::cout << "GOT TO CONTENT LEN" << std::endl;
-		int	contentLen = std::stoi(request.headers.at("Content-Length")); //converts it to int
-		if (contentLen < 0) {
+		size_t contentLen = 0;
+		try {
+			contentLen = std::stoull(request.headers.at("Content-Length"));
+			if (contentLen == 0) {
+				request.isValid = false;
+				request.errorMessage = "Invalid Content-Length value (cannot be zero).";
+				return request;
+			}
+		} catch (const std::invalid_argument& e) {
 			request.isValid = false;
-			request.errorMessage = "Invalid Content-Length value.";
+			request.errorMessage = "Content-Length contains non-numeric characters.";
+			return request;
+		} catch (const std::out_of_range& e) {
+			request.isValid = false;
+			request.errorMessage = "Content-Length value is out of range.";
 			return request;
 		}
 
@@ -172,9 +180,8 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			return request;
 		}
 
-		 // If the entire body wasn't already received with the headers,
-		// continue reading from the socket.
-		while (rawRequest.size() < bodyStart + static_cast<size_t>(contentLen)) { //new
+		 // If the entire body wasn't already received with the headers, continue reading from the socket.
+		while (rawRequest.size() < bodyStart + contentLen) {
 			bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 			if (bytesRead <= 0) {
 				request.isValid = false;
@@ -198,32 +205,23 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			request.errorMessage = "Headers not complete.";
 			return request;
 		}
-		// std::cout << "got to chunked" << std::endl;
 		pos += (rawRequest.compare(pos, 4, "\r\n\r\n") == 0) ? 4 : 2; //skip the header delim
 
-		// std::cout << "Pos: " << pos << std::endl;
 		// Skip any extra CRLFs that may be present after the header delimiter.
 		while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
 			pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
 		}
-		// std::cout << "Pos after first skip: " << pos << std::endl;
 
 		while (true) { //breaks when 0\r\n is found
 			// Find the CRLF that ends the chunk size line.
-			// size_t	lineEnd = rawRequest.find_first_of("\r\n", pos);
-
 			size_t	lineEnd = rawRequest.find("\r\n", pos);
 			size_t	delimLen = 2;
 			if (lineEnd == std::string::npos) {
 				lineEnd = rawRequest.find("\n", pos);
 				delimLen = 1; // Adjust for single newline
 			}
-			// if (lineEnd == std::string::npos) {
-			// 	request.isValid = false;
-			// 	request.errorMessage = "Malformed chunk size line.";
-			// 	return request;
-			// }
-			while (lineEnd == std::string::npos) { //if \r\n or \n is not found, line is incomplete, need more data
+
+			while (lineEnd == std::string::npos) { //if lineEnd is not found, need more data
 				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 				if (bytesRead <= 0) {
 					request.isValid = false;
@@ -238,41 +236,28 @@ HttpRequest	parseHttpRequest(int clientFd) {
 				}
 			}
 
-			// std::cout << "Pos before second skip: " << pos << std::endl;
 			// Move past any stray newlines before parsing chunk size
 			while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
 				pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
 			}
-			// std::cout << "Pos after second skip: " << pos << std::endl;
 
+			//end of the chunk size line should be after the current position
 			if (lineEnd <= pos) {
 				request.isValid = false;
 				request.errorMessage = "Malformed chunk size line.";
 				return request;
 			}
 
-			std::string	chunkSizeStr;
-			if (lineEnd > pos) {  // Ensure valid range
-				chunkSizeStr = rawRequest.substr(pos, lineEnd - pos);
-			} else {
-				request.isValid = false;
-				request.errorMessage = "Invalid chunk size format.";
-				return request;
-			}
-
+			//Extract the chunk size from rawRequest
+			std::string	chunkSizeStr = rawRequest.substr(pos, lineEnd - pos);
 			chunkSizeStr.erase(0, chunkSizeStr.find_first_not_of(" \t"));
 			chunkSizeStr.erase(chunkSizeStr.find_last_not_of(" \t") + 1);
 			
-			// int	chunkSize;
-			// std::istringstream	iss(chunkSizeStr);
-			// iss >> std::hex >> chunkSize; //converts hex chunkSize into int
-			
 			//Extract the chunk size (in hexadecimal)
-			int chunkSize;
+			size_t	chunkSize;
 			try {
-				chunkSize = std::stoul(chunkSizeStr, nullptr, 16); // Convert hex to int
+				chunkSize = std::stoul(chunkSizeStr, nullptr, 16); // Convert str to int, with 16 base system
 			} catch (const std::exception& e) {
-				std::cout << "Error converting chunk size: " << e.what() << std::endl;
 				request.isValid = false;
 				request.errorMessage = "Invalid chunk size.";
 				return request;
@@ -297,6 +282,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			//advance pointer past chunked data
 			pos = chunkDataStart + chunkSize;
 
+			//advance pointer past delim
 			if (pos < rawRequest.size() && rawRequest.compare(pos, 2, "\r\n") == 0) {
 				pos += 2;
 			} else if (pos < rawRequest.size() && rawRequest[pos] == '\n') {
