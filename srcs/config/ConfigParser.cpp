@@ -3,17 +3,8 @@
 /*
 TODO: 
 
-1. (done) fix multiple root error in server, throws errors even if it's in seperate locaions
-
-2. (done) throw error on random values on config file
-(may want to implement parsed value checking)
-
-(done) 3. serers can't have the same name, but can have the same port
-
-4. use client_max_body_size directive from the config file
+1. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
-
-5. Throw an error with multiple listen directives in a server
 
 */
 
@@ -71,13 +62,17 @@ int	ConfigParser::parseSize(const std::string &sizeStr) {
 void	ConfigParser::getPortHost(const std::string &line, serverConfig &config) {
 	size_t	pos = line.find(':');
 	if (pos != std::string::npos) {
-		config.port = line.substr(pos + 1);
-		config.host = line.substr(0, pos);
+		config.port = line.substr(pos + 1); //old
+		config.host = line.substr(0, pos); //old
+		// config.host.push_back(line.substr(0, pos)); //new for vector
+		// config.port.push_back(line.substr(pos + 1));
 	}
 	else {
-		config.port = line; //if only one, it makes it the port, could be error prone
+		config.port = line; //if only one, it makes it the port, could be error prone //old
+		config.host = "0.0.0.0";
+		// config.host.push_back("0.0.0.0");  // Default host if none is provided
+		// config.port.push_back(line); //if no colon treat line as port
 	}
-	//else default case?
 }
 
 void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list of serverConfig each contains a list of Route
@@ -152,6 +147,7 @@ void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list 
 				} else if (line.find("return") == 0) { //redir
 					std::vector<std::string>	partsR = split(getValue(line), ' ');
 					if (partsR.size() == 2) {
+						currentRoute.redirection.clear();
 						currentRoute.redirection[std::stoi(partsR[0])] = partsR[1];
 					}
 				} else if (line.find("cgi_extension") == 0) {
@@ -272,10 +268,13 @@ void	ConfigParser::tester(const std::string &inFile) {
 	parser.checkingFunction();
 
 	for (const auto &server : parser.servers) {
-		std::cout << "\nServer on " << server.host << ":" << server.port << "\n";
+		std::cout << "\nServer on " << server.host << ":" << server.port << "\n"; //single print
+		// for (size_t i = 0; i < server.host.size(); ++i) { //only looping list of hosts now
+		// 	std::cout << "  - " << server.host[i] << ":" << server.port[i] << "\n";
+		// }
 
 		if (!server.serverNames.empty()) {
-			std::cout << " Server Names: ";
+			std::cout << " Server Name: ";
 			for (const auto &name : server.serverNames) {
 				std::cout << name << " ";
 			}
@@ -304,17 +303,18 @@ void	ConfigParser::tester(const std::string &inFile) {
 				std::cout << "\n";
 			}
 			if (!route.alias.empty()) std::cout << "    alias: " << route.alias << "\n";
-			if (!route.redirection.empty()) {
-			std::cout << " Redirection:\n";
-			for (const auto &redir : route.redirection) {
-				std::cout << "  " << redir.first << " -> " << redir.second << "\n";
-			}
-		}
 			if (!route.cgiExtension.empty()) std::cout << "    CGI Extension: " << route.cgiExtension << "\n";
 			if (!route.cgiPath.empty()) std::cout << "    CGI Path: " << route.cgiPath << "\n";
+			// std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n"; //print even if not set
 			std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n";
-			if (route.uploadEnabled) std::cout << "    Upload Enabled: On\n";
+			std::cout << "    Upload Enable: " << (route.uploadEnabled ? "On" : "Off") << "\n";
 			if (!route.uploadPath.empty()) std::cout << "    Upload Path: " << route.uploadPath << "\n";
+			if (!route.redirection.empty()) {
+				std::cout << " Redirection:\n";
+				for (const auto &redir : route.redirection) {
+					std::cout << "  " << redir.first << " -> " << redir.second << "\n\n";
+				}
+			}
 		}
 	}
 }

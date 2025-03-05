@@ -3,21 +3,17 @@
 /*
 TODO
 
-1.	(done) HTTP requests should allow \n too for the new lines insted of \r\n
-
-2. (done) create a headersParsed bool
-
-3. (done) add one pollfd struct to each request struct
-
-4. (done) fix chunked transer encoding
-5. (done) NEW ISSUE, Fix chunked encoding to work with |n only 
-   (done) chunked encoding is now fully working
-
 match socket to server and get client_max_body_size from there
-6. use client_max_body_size directive from the config file
+1. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
+1.5. chooseServer function, maybe call in parsing or implement partially/modify, need to find host for it
 
-7. check what error to throw and how to handle client_max_body_size once recieved via function call
+2. check what error to throw and how to handle client_max_body_size once recieved via function call
+
+3. headers parsed bool might be set too early, check
+
+4. check error codes when encoutering an error, create error code var and send it
+
 */
 
 HttpRequest	parseHttpRequest(int clientFd) {
@@ -44,7 +40,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 			headerEnd = rawRequest.find("\n\n"); // Support '\n' only requests
 		}
 		if (headerEnd != std::string::npos) {
-			request.headersParsed = true;
+			request.headersParsed = true; // just read, not parsed
 			break;
 		}
 	}
@@ -149,6 +145,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		request.errorMessage = "Malformed request: both Content-Length and Transfer-Encoding present.";
 		return request;
 	}
+	//headers parsed
 
 	// Handle request body
 	if (hasContentLength) {

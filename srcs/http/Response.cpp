@@ -47,7 +47,7 @@ void	Response::chooseServer(int fd, const HttpRequest& request,
 				first_match = &server;
 			for (const auto& name : server.serverNames ) {
 				if (name == value) {
-					this->choosed_server = &server;
+					this->choosed_server = &server; //pointer to correct server
 					return;
 				}
 			}
