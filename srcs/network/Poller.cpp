@@ -28,5 +28,33 @@ void	Poller::initPoll(std::vector<int> &server_fds)
 void	Poller::processPoll()
 {
 	if (poll(poll_fds, nfds, TIMEOUT) == -1)
-		error_exit("failed to invoke poll function", "");
+		std::cerr << "poll() failed: " << strerror(errno) << std::endl;
+}
+
+void	Poller::removeFd(int& fd_index)
+{
+	if (fd_index < 0 || fd_index >= nfds) return;
+
+	close(poll_fds[fd_index].fd);
+
+	for (int i = fd_index; i < nfds - 1; ++i) {
+		poll_fds[i] = poll_fds[i + 1];
+	}
+	nfds--;
+	fd_index--;
+}
+
+bool	Poller::skipFd(bool is_server, int& fd_index)
+{
+	(void)is_server;
+	if (poll_fds[fd_index].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+		//if (!is_server) removeFd(fd_index); ???
+		return true;
+	}
+	if (!(poll_fds[fd_index].revents & POLLIN)) {
+		//if (!is_server) removeFd(fd_index); ???
+		return true;
+	}
+
+	return false;
 }

@@ -11,7 +11,6 @@ class Connection
 	public:
 		bool	isServerFd(int fd, const std::vector<int>& server_fds);
 		void	handleServerFd(int fd, Poller& poller);
-		void	handleClientFd(struct pollfd& pollfd);
 };
 
 #endif

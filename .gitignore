@@ -7,3 +7,4 @@ project_info.conf
 .DS_Store
 Dockerfile
 start.sh
+request.txt

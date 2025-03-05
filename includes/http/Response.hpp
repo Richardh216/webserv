@@ -37,8 +37,6 @@ class Response
 		std::string checkLastWriteTime(const char *path);
 
 	public:
-		void	testInitRequest(HttpRequest& request);
-
 		std::string findHeaderValue(const std::string& name,
 			const std::map<std::string, std::string>& headers) const;
 		void	chooseServer(int fd, const HttpRequest& request,

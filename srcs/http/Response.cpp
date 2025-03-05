@@ -1,20 +1,5 @@
 #include "../../includes/webserv.hpp"
 
-void	Response::testInitRequest(HttpRequest& request)
-{
-	request.method = "GET";
-	request.path = "/";
-	request.httpVersion = "HTTP/1.1";
-
-	request.headers.insert(std::pair("Host", "localhost"));
-	request.headers.insert(std::pair("From", "someuser@jmarshall.com"));
-	request.headers.insert(std::pair("User-Agent", "HTTPTool/1.1"));
-
-	request.body = "";
-
-	request.isValid = true;
-}
-
 std::string	Response::findHeaderValue(const std::string& name,
 	const std::map<std::string, std::string>& headers) const
 {
@@ -47,7 +32,7 @@ void	Response::chooseServer(int fd, const HttpRequest& request,
 				first_match = &server;
 			for (const auto& name : server.serverNames ) {
 				if (name == value) {
-					this->choosed_server = &server; //pointer to correct server
+					this->choosed_server = &server;
 					return;
 				}
 			}
@@ -292,9 +277,6 @@ void	Response::generateAutoindexHTML(const std::string& full_path, const Webserv
 
 	std::string main_dir = std::filesystem::path(tmp_path).filename().string();
 	if (!main_dir.empty()) main_dir += "/";
-
-	std::cout << "\n\nfull_path: " << full_path << "\n";
-	std::cout << "main_dir: " << main_dir << "\n\n";
 
 	body = R"(
 	<!DOCTYPE html>
