@@ -40,7 +40,7 @@ int	main(int argc, char **argv)
 		parser.parseConfigFile(webserv.config_path); //no prints, needs checking called after
 		parser.checkingFunction();
 
-		// testParseHttpRequest(); //prints the tests for HTTP parsing, it now uses sokcets and file descriptor instead of rawString
+		testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, it now uses sokcets and file descriptor instead of rawString
 
 		server_sockets.initSockets(parser.servers);
 		poller.initPoll(server_sockets.server_fds);
@@ -61,7 +61,7 @@ int	main(int argc, char **argv)
 				}
 				else {
 					Response response;
-					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd);
+					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers); //call parser.servers
 					if (request.isValid) {
 						printRequest(request);
 						response.chooseServer(poller.poll_fds[i].fd, request, parser.servers);

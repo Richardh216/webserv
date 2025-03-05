@@ -9,6 +9,8 @@
 #include <set>
 #include <poll.h>
 
+struct serverConfig;
+
 struct HttpRequest {
 	std::string	method;
 	std::string	path;
@@ -18,10 +20,11 @@ struct HttpRequest {
 	bool	isValid = true;
 	std::string	errorMessage;
 	bool	headersParsed = false;
-	struct	pollfd	poll_fd;
+	struct	pollfd	poll_fd; //may need to be sockaddr_in ?
 };
 
-HttpRequest	parseHttpRequest(int clientFd);
-void		testParseHttpRequest(void);
+serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue);
+HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers);
+void		testParseHttpRequest(std::vector<serverConfig>& servers);
 
 #endif

@@ -3,6 +3,8 @@
 /*
 TODO
 
+- integrate into school version, there has been a new pull, this is outdated kinda
+
 match socket to server and get client_max_body_size from there
 1. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
@@ -14,19 +16,54 @@ when saving the body, if not specified use default value
 
 4. check error codes when encoutering an error, create error code var and send it
 
+5. Implement client_max_body_size, we are able to get the value now, banger
+
 */
 
-HttpRequest	parseHttpRequest(int clientFd) {
-	constexpr size_t	BUFFER_SIZE = 4096; //use client_max_body_size instead, recieve it when called
-	std::vector<char>	buffer(BUFFER_SIZE);
+serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue) {
+	struct sockaddr_in	client_address;
+	socklen_t			add_len = sizeof(client_address);
+
+	if (getsockname(fd, (struct sockaddr*)&client_address, &add_len) == -1) {
+		throw std::runtime_error("Failed to get socket name");
+	}
+
+	serverConfig *first_match = nullptr;
+	for (auto &server : servers) {
+		if (client_address.sin_port == server.bind_addr.sin_port
+			&& (client_address.sin_addr.s_addr == server.bind_addr.sin_addr.s_addr
+			|| server.bind_addr.sin_addr.s_addr == INADDR_ANY)) { //INADDR_ANY: also allows 0.0.0.0, can use just 0 instead
+				if (!first_match) {
+					first_match = &server;
+				}
+				for (const auto &name : server.serverNames) {
+					if (name == hostValue) {
+						first_match = &server;
+						return *first_match;
+					}
+				}
+			}
+	}
+	if (!first_match) {
+		throw std::runtime_error("No matching server configuration found");
+	}
+	return *first_match;
+}
+
+HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
+	// constexpr size_t	BUFFER_SIZE = 4096; //use client_max_body_size instead, recieve it when called
+	// std::vector<char>	buffer(BUFFER_SIZE);
 	std::string			rawRequest;
 	ssize_t				bytesRead;
 	HttpRequest			request;
-
+	
 	request.poll_fd.fd = clientFd;
+	char c;
+
 	//Reading request data
-	while (true) {
-		bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
+	while (!request.headersParsed) {
+		// bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
+		bytesRead = recv(clientFd, &c, 1, 0); // Read 1 byte at a time
 		if (bytesRead < 0) {
 			request.isValid = false;
 			request.errorMessage = "Error recieving data.";
@@ -34,14 +71,15 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		} else if (bytesRead == 0) {
 			break; //the client closed the connection
 		}
-		rawRequest.append(buffer.data(), bytesRead); // buffer.data() returns a pointer to its first element
+		// rawRequest.append(buffer.data(), bytesRead); // buffer.data() returns a pointer to its first element
+		rawRequest += c;
 		size_t headerEnd = rawRequest.find("\r\n\r\n");
 		if (headerEnd == std::string::npos) {
 			headerEnd = rawRequest.find("\n\n"); // Support '\n' only requests
 		}
 		if (headerEnd != std::string::npos) {
 			request.headersParsed = true; // just read, not parsed
-			break;
+			// break;
 		}
 	}
 
@@ -146,6 +184,26 @@ HttpRequest	parseHttpRequest(int clientFd) {
 		return request;
 	}
 	//headers parsed
+
+	std::string	hostValue;
+	auto it = request.headers.find("Host");
+	if (it != request.headers.end()) {
+		hostValue = it->second;
+	} else {
+		// Handle missing "Host" header
+		std::cout << "MISSING HOST OMG WHAT TO DO NOW" << std::endl;
+	}
+
+	serverConfig	currentServer = selectServer(request.poll_fd.fd, servers, hostValue);
+	std::cout << "\nCurrent Server on " << currentServer.host << ":" << currentServer.port << "\n";
+	std::cout << " Current Server Name: " << currentServer.serverNames[0] << "\n";
+	std::cout << " Current Server Root: " << currentServer.root << "\n";
+	std::cout << " Client Max Body Size: " << currentServer.client_max_body_size << " bytes\n";
+
+	std::cout << "Bytes BEFORE BUFFER SIZE: " << rawRequest.size() << std::endl; //doesn't matter, only refers to max body size
+
+	size_t	BUFFER_SIZE = currentServer.client_max_body_size; //check if it's over the allowed amount
+	std::vector<char>	buffer(BUFFER_SIZE);
 
 	// Handle request body
 	if (hasContentLength) {
@@ -293,7 +351,7 @@ HttpRequest	parseHttpRequest(int clientFd) {
 	return request;
 }
 
-void testParseHttpRequest(void) {
+void testParseHttpRequest(std::vector<serverConfig>& servers) {
 
 	// std::string httpRequest = //chunked complex normal
 	// 	"POST /api/data HTTP/1.1\r\n"
@@ -399,7 +457,7 @@ void testParseHttpRequest(void) {
 	shutdown(sv[1], SHUT_WR);
 		
 	// Directly call parseHttpRequest using the reading end of the socketpair.
-	HttpRequest request = parseHttpRequest(sv[0]);
+	HttpRequest request = parseHttpRequest(sv[0], servers);
 		
 	// Output parsed results.
 	std::cout << "\npoll_fd: " << request.poll_fd.fd << "\n";
