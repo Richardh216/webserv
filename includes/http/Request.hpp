@@ -18,9 +18,10 @@ struct HttpRequest {
 	std::map<std::string, std::string>	headers;
 	std::string	body;
 	bool	isValid = true;
-	std::string	errorMessage;
+	std::string	errorMessage; //might be redundant
 	bool	headersParsed = false;
 	struct	pollfd	poll_fd;
+	std::map<int, std::string>	errorCodes;
 };
 
 serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue);

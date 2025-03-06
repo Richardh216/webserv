@@ -3,16 +3,19 @@
 /*
 TODO
 
-1. use client_max_body_size directive from the config file
+1. (done) use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
 
-2. check what error to throw and how to handle client_max_body_size once recieved via function call
+2. (done) headers parsed bool might be set too early, check
 
-3. headers parsed bool might be set too early, check
+3. (done) check error codes when encoutering an error, create error code var and send it
 
-4. check error codes when encoutering an error, create error code var and send it
+4. (done) Implement client_max_body_size, we are able to get the value now, banger
+4.5 (done) still needs to have a default option if it is -1, or non existant, uses -1 to set it to a default value
 
-5. Implement client_max_body_size, we are able to get the value now, banger
+5. handle case where there is a body, but no content-length, or chunked-transfer-encoding
+
+6 .check error handling when parsing client_max_body_size
 
 */
 
@@ -47,42 +50,39 @@ serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::stri
 }
 
 HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
-	// constexpr size_t	BUFFER_SIZE = 4096; //use client_max_body_size instead, recieve it when called
-	// std::vector<char>	buffer(BUFFER_SIZE);
 	std::string			rawRequest;
 	ssize_t				bytesRead;
 	HttpRequest			request;
+	bool				headersRead = false;
+	size_t headerEnd;
 	
 	request.poll_fd.fd = clientFd;
 	char c;
 
 	//Reading request data
-	while (!request.headersParsed) {
-		// bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
+	while (!headersRead) {
 		bytesRead = recv(clientFd, &c, 1, 0); // Read 1 byte at a time
 		if (bytesRead < 0) {
 			request.isValid = false;
-			request.errorMessage = "Error recieving data.";
+			request.errorCodes[400] = "Bad Request";
 			return request;
 		} else if (bytesRead == 0) {
 			break; //the client closed the connection
 		}
-		// rawRequest.append(buffer.data(), bytesRead); // buffer.data() returns a pointer to its first element
-		rawRequest += c;
-		size_t headerEnd = rawRequest.find("\r\n\r\n");
+		rawRequest += c; //append the data
+		headerEnd = rawRequest.find("\r\n\r\n");
 		if (headerEnd == std::string::npos) {
 			headerEnd = rawRequest.find("\n\n"); // Support '\n' only requests
 		}
 		if (headerEnd != std::string::npos) {
-			request.headersParsed = true; // just read, not parsed
-			// break;
+			headersRead = true; // just read, not parsed
 		}
 	}
 
 	// if no data was read, return invalid request
 	if (rawRequest.empty()) {
 		request.isValid = false;
-		request.errorMessage = "Empty request.";
+		request.errorCodes[400] = "Bad Request";
 		return request;
 	}
 
@@ -93,7 +93,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 	// Read and parse the request line
 	if (!std::getline(stream, line) || line.empty()) {
 		request.isValid = false;
-		request.errorMessage = "Invalid or empty request line.";
+		request.errorCodes[400] = "Bad Request";
 		return request;
 	}
 
@@ -105,7 +105,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 	std::istringstream	lineStream(line); //split the request line into method, path ...
 	if (!(lineStream >> request.method >> request.path >> request.httpVersion)) {
 		request.isValid = false;
-		request.errorMessage = "Invalid request line.";
+		request.errorCodes[400] = "Bad Request";
 		return request;
 	}
 
@@ -113,14 +113,14 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 	static const std::set<std::string>	validMethods = {"GET", "POST", "DELETE"}; //only these methods are allowed
 	if (validMethods.find(request.method) == validMethods.end()) {
 		request.isValid = false;
-		request.errorMessage = "Invalid HTTP method for the project: " + request.method;
+		request.errorCodes[405] = "Method Not Allowed";
 		return request;
 	}
 
 	//check http version						//R: define a string without having to escape special characters like backslashes.
 	if (!std::regex_match(request.httpVersion, std::regex(R"(HTTP\/\d\.\d)"))) { //matches strings that start with "HTTP/", then a digit, a dot, and another digit
 		request.isValid = false;
-		request.errorMessage = "Invalid HTTP version: " + request.httpVersion;
+		request.errorCodes[505] = "HTTP Version Not Supported";
 		return request;
 	}
 
@@ -136,7 +136,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 		size_t	colonPos = line.find(':'); //Finds the ":" separator in each header
 		if (colonPos == std::string::npos) {
 			request.isValid = false;
-			request.errorMessage = "Invalid header: " + line;
+			request.errorCodes[400] = "Bad Request";
 			return request;
 		}
 
@@ -176,29 +176,39 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 
 	if (hasContentLength && hasChunkedEncoding) {
 		request.isValid = false;
-		request.errorMessage = "Malformed request: both Content-Length and Transfer-Encoding present.";
+		request.errorCodes[400] = "Bad Request";
 		return request;
 	}
+
+	//handle case where there is a body, but no content-length, or chunked-transfer-encoding
+	//headerEnd - will be useful
+
 	//headers parsed
+	request.headersParsed = true;
 
 	std::string	hostValue;
 	auto it = request.headers.find("Host");
 	if (it != request.headers.end()) {
 		hostValue = it->second;
-	} else {
-		// Handle missing "Host" header
-		std::cout << "missing host" << std::endl;
+	} else { //missing host header
+		request.errorCodes[400] = "Bad Request";
 	}
 
+	//get Config data
+	size_t			BUFFER_SIZE; //maybe add a check if it's beyond a reasonable amount limit it, so that it won't slow everything down
+	const size_t	DEFAULT_MAX_BODY_SIZE = 1048576; // 1MB default
 	serverConfig	currentServer = selectServer(request.poll_fd.fd, servers, hostValue);
-	std::cout << "\nCurrent Server on " << currentServer.host << ":" << currentServer.port << "\n";
-	std::cout << " Current Server Name: " << currentServer.serverNames[0] << "\n";
-	std::cout << " Current Server Root: " << currentServer.root << "\n";
-	std::cout << " Client Max Body Size: " << currentServer.client_max_body_size << " bytes\n";
 
-	std::cout << "Bytes BEFORE BUFFER SIZE: " << rawRequest.size() << std::endl; //doesn't matter, only refers to max body size
-
-	size_t	BUFFER_SIZE = currentServer.client_max_body_size; //check if it's over the allowed amount
+	if (currentServer.client_max_body_size == 0 && (hasContentLength || hasChunkedEncoding)) {
+			request.isValid = false;
+			request.errorCodes[413] = "Payload Too Large";
+			return request;
+	} else if (currentServer.client_max_body_size == -1) {
+		BUFFER_SIZE = DEFAULT_MAX_BODY_SIZE;
+	} else {
+		BUFFER_SIZE = currentServer.client_max_body_size;
+	}
+	std::cout << "BUFFER_SIZE: " << BUFFER_SIZE << std::endl;
 	std::vector<char>	buffer(BUFFER_SIZE);
 
 	// Handle request body
@@ -208,16 +218,21 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 			contentLen = std::stoull(request.headers.at("Content-Length"));
 			if (contentLen == 0) {
 				request.isValid = false;
-				request.errorMessage = "Invalid Content-Length value (cannot be zero).";
+				request.errorCodes[400] = "Bad Request";
+				return request;
+			}
+			if (contentLen > BUFFER_SIZE) { //check if contentLen can fit in BUFFER_SIZE
+				request.isValid = false;
+				request.errorCodes[413] = "Payload Too Large";
 				return request;
 			}
 		} catch (const std::invalid_argument& e) {
 			request.isValid = false;
-			request.errorMessage = "Content-Length contains non-numeric characters.";
+			request.errorCodes[400] = "Bad Request";
 			return request;
 		} catch (const std::out_of_range& e) {
 			request.isValid = false;
-			request.errorMessage = "Content-Length value is out of range.";
+			request.errorCodes[400] = "Bad Request";
 			return request;
 		}
 
@@ -229,7 +244,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 			bodyStart += (rawRequest[bodyStart] == '\r') ? 4 : 2; //adjust offset
 		} else {
 			request.isValid = false;
-			request.errorMessage = "Malformed request: No valid header-body delimiter found.";
+			request.errorCodes[400] = "Bad Request";
 			return request;
 		}
 
@@ -238,7 +253,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 			bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 			if (bytesRead <= 0) {
 				request.isValid = false;
-				request.errorMessage = "Incomplete request body.";
+				request.errorCodes[400] = "Bad Request";
 				return request;
 			}
 			rawRequest.append(buffer.data(), bytesRead);
@@ -255,7 +270,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 		}
 		if (pos == std::string::npos) {
 			request.isValid = false;
-			request.errorMessage = "Headers not complete.";
+			request.errorCodes[400] = "Bad Request";
 			return request;
 		}
 		pos += (rawRequest.compare(pos, 4, "\r\n\r\n") == 0) ? 4 : 2; //skip the header delim
@@ -264,6 +279,8 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 		while (pos < rawRequest.size() && (rawRequest.compare(pos, 2, "\r\n") == 0 || rawRequest[pos] == '\n')) {
 			pos += (rawRequest.compare(pos, 2, "\r\n") == 0) ? 2 : 1;
 		}
+
+		size_t	totalBodySize = 0;
 
 		while (true) { //breaks when 0\r\n is found
 			// Find the CRLF that ends the chunk size line.
@@ -278,7 +295,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 				if (bytesRead <= 0) {
 					request.isValid = false;
-					request.errorMessage = "Incomplete chunked transfer encoding: missing chunk size line.";
+					request.errorCodes[400] = "Bad Request";
 					return request;
 				}
 				rawRequest.append(buffer.data(), bytesRead);
@@ -297,7 +314,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 			//end of the chunk size line should be after the current position
 			if (lineEnd <= pos) {
 				request.isValid = false;
-				request.errorMessage = "Malformed chunk size line.";
+				request.errorCodes[400] = "Bad Request";
 				return request;
 			}
 
@@ -312,25 +329,35 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 				chunkSize = std::stoul(chunkSizeStr, nullptr, 16); // Convert str to int, with 16 base system
 			} catch (const std::exception& e) {
 				request.isValid = false;
-				request.errorMessage = "Invalid chunk size.";
+				request.errorCodes[400] = "Bad Request";
 				return request;
 			}
 
 			if (chunkSize == 0) { //the last chunk was received, end of the loop
 				break;
 			}
+
+			if (totalBodySize + chunkSize > BUFFER_SIZE) { //check for client_max_body_size bounds
+				request.isValid = false;
+				request.errorCodes[413] = "Payload Too Large";
+				return request;
+			}
+
 			size_t chunkDataStart = lineEnd + delimLen; //Move past the chunk size line (and its CRLF)
 			// Ensure the entire chunk and its trailing CRLF are available
 			while (rawRequest.size() < chunkDataStart + chunkSize + delimLen) { //If rawRequest is too short, call recv() to read more data from the socket
 				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 				if (bytesRead <= 0) {
 					request.isValid = false;
-					request.errorMessage = "Incomplete chunked transfer encoding: chunk data missing.";
+					request.errorCodes[400] = "Bad Request";
 					return request;
 				}
 				rawRequest.append(buffer.data(), bytesRead);
 			}
 			chunkedBody.append(rawRequest.substr(chunkDataStart, chunkSize)); // Append the chunk data to the chunkBody
+
+			//update body size
+			totalBodySize += chunkSize;
 
 			//advance pointer past chunked data
 			pos = chunkDataStart + chunkSize;
@@ -448,13 +475,20 @@ void testParseHttpRequest(std::vector<serverConfig>& servers) {
 	// Write the HTTP request to one end of the socketpair.
 	ssize_t n = write(sv[1], httpRequest.c_str(), httpRequest.size());
 	std::cout << "Bytes written to socketpair: " << n << "\n";
-		
+
 	// Signal EOF on the writing end.
 	shutdown(sv[1], SHUT_WR);
 		
 	// Directly call parseHttpRequest using the reading end of the socketpair.
 	HttpRequest request = parseHttpRequest(sv[0], servers);
-		
+
+	if (!request.errorCodes.empty()) {
+		std::cout << " Error Codes:\n";
+		for (const auto &errorCode : request.errorCodes) {
+			std::cout << "  " << errorCode.first << " -> " << errorCode.second << "\n";
+		}
+	}
+
 	// Output parsed results.
 	std::cout << "\npoll_fd: " << request.poll_fd.fd << "\n";
 	std::cout << "\nMethod: " << request.method << "\n";

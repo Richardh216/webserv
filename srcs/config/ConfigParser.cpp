@@ -3,8 +3,7 @@
 /*
 TODO: 
 
-1. use client_max_body_size directive from the config file
-when saving the body, if not specified use default value
+1. double check error handling and in general handling of client_max_body_size
 
 */
 
@@ -53,9 +52,30 @@ std::string	ConfigParser::getLocationPath(const std::string &line) {
 	return trim(path);
 }
 
-int	ConfigParser::parseSize(const std::string &sizeStr) {
-	if (sizeStr.back() == 'M') return std::stoi(sizeStr.substr(0, sizeStr.size() - 1)) * 1024 * 1024;
-	if (sizeStr.back() == 'K') return std::stoi(sizeStr.substr(0, sizeStr.size() - 1)) * 1024;
+int	ConfigParser::parseSize(const std::string &sizeStr) { //discuss error handling
+	long	tmpVal;
+	if (!isdigit(sizeStr.back()) && (sizeStr.back() != 'M' && sizeStr.back() != 'm' && sizeStr.back() != 'k' && sizeStr.back() != 'K'))
+		return -1; //use default value if it's incoherent
+	if (sizeStr.size() == 1) {
+		tmpVal = std::stol(sizeStr.substr(0, sizeStr.size()));
+	} else {
+		tmpVal = std::stol(sizeStr.substr(0, sizeStr.size() - 1));
+	}
+	int		val = 0;
+	if (tmpVal < INT_MIN) {
+		return 0; //negative out of bounds, will handle it as no body allowed
+	} else if (tmpVal > INT_MAX) {
+		return -1; //positive out of bounds, will handle it as default value
+	} else {
+		val = static_cast<int>(tmpVal);
+	}
+	if (val == -1) {
+		return -1; // default value
+	} else if (val < -1) {
+		return 0; //no body allowed
+	}
+	if (sizeStr.back() == 'M' || sizeStr.back() == 'm') return val * 1024 * 1024;
+	if (sizeStr.back() == 'K' || sizeStr.back() == 'k') return val * 1024;
 	return std::stoi(sizeStr);
 }
 
