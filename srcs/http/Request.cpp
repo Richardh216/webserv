@@ -13,9 +13,12 @@ when saving the body, if not specified use default value
 4. (done) Implement client_max_body_size, we are able to get the value now, banger
 4.5 (done) still needs to have a default option if it is -1, or non existant, uses -1 to set it to a default value
 
-5. handle case where there is a body, but no content-length, or chunked-transfer-encoding
+5. (done?) handle case where there is a body, but no content-length, or chunked-transfer-encoding
+http 1.1 needs length defined, 1.0 apparetly can read until connection is closed
 
 6 .check error handling when parsing client_max_body_size
+
+7. split up the function into smaller chunks
 
 */
 
@@ -49,12 +52,18 @@ serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::stri
 	return *first_match;
 }
 
+/*
+Regarding recv() calls:
+	- If the socket is non-blocking, recv() will return immediately if there's no data
+*/
+
 HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 	std::string			rawRequest;
 	ssize_t				bytesRead;
 	HttpRequest			request;
 	bool				headersRead = false;
-	size_t headerEnd;
+	size_t	headerEnd;
+	// size_t	delimLen; //may be worth implementing universal delim len
 	
 	request.poll_fd.fd = clientFd;
 	char c;
@@ -201,7 +210,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 
 	if (currentServer.client_max_body_size == 0 && (hasContentLength || hasChunkedEncoding)) {
 			request.isValid = false;
-			request.errorCodes[413] = "Payload Too Large";
+			request.errorCodes[413] = "Content Too Large";
 			return request;
 	} else if (currentServer.client_max_body_size == -1) {
 		BUFFER_SIZE = DEFAULT_MAX_BODY_SIZE;
@@ -223,7 +232,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 			}
 			if (contentLen > BUFFER_SIZE) { //check if contentLen can fit in BUFFER_SIZE
 				request.isValid = false;
-				request.errorCodes[413] = "Payload Too Large";
+				request.errorCodes[413] = "Content Too Large";
 				return request;
 			}
 		} catch (const std::invalid_argument& e) {
@@ -339,7 +348,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 
 			if (totalBodySize + chunkSize > BUFFER_SIZE) { //check for client_max_body_size bounds
 				request.isValid = false;
-				request.errorCodes[413] = "Payload Too Large";
+				request.errorCodes[413] = "Content Too Large";
 				return request;
 			}
 
@@ -371,10 +380,37 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 		}
 		request.body = chunkedBody; //store full body
 	}
+	//in case there is a body, but no Content-Length or Chunked Transfer Encoding
+	//in case it's GET or DELETE and there is no header to indicate size, it ignores the body
+	if (request.method == "POST" && (!hasContentLength && !hasChunkedEncoding)) {
+		if (request.httpVersion == "HTTP/1.1") { //may remove this check
+			// std::cout << "VERSION 1.1 CASE" << std::endl;
+			request.isValid = false;
+			request.errorCodes[411] = "Length Required";
+			return request;
+		}
+		// else if (request.httpVersion == "HTTP/1.0") { //potential, different versions behave differently, probably won't implement
+		// 	std::cout << "VERSION 1.0 CASE" << std::endl;
+		// }
+	}
 	return request;
 }
 
 void testParseHttpRequest(std::vector<serverConfig>& servers) {
+
+
+	// std::string httpRequest = //one for delete
+	// "DELETE /users/123 HTTP/1.1\r\n"
+	// "Host: example.com\r\n"
+	// "User-Agent: MyClient/1.0\r\n"
+	// "\r\n";
+
+	// std::string httpRequest = //one for get
+	// "GET /users/123 HTTP/1.1\r\n"
+	// "Host: example.com\r\n"
+	// "User-Agent: MyClient/1.0\r\n"
+	// "Accept: application/json\r\n"
+	// "\r\n";
 
 	// std::string httpRequest = //chunked complex normal
 	// 	"POST /api/data HTTP/1.1\r\n"
@@ -497,7 +533,9 @@ void testParseHttpRequest(std::vector<serverConfig>& servers) {
 	for (const auto& header : request.headers) {
 		std::cout << header.first << ": " << header.second << "\n";
 	}
-	std::cout << "Body: " << request.body << "\n";
+	if (!request.body.empty()) {
+		std::cout << "Body: " << request.body << "\n";
+	}
 		
 	close(sv[0]);
 	close(sv[1]);
