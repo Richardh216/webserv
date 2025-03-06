@@ -20,7 +20,7 @@ struct HttpRequest {
 	bool	isValid = true;
 	std::string	errorMessage;
 	bool	headersParsed = false;
-	struct	pollfd	poll_fd; //may need to be sockaddr_in ?
+	struct	pollfd	poll_fd;
 };
 
 serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue);

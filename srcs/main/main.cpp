@@ -40,37 +40,40 @@ int	main(int argc, char **argv)
 		parser.parseConfigFile(webserv.config_path); //no prints, needs checking called after
 		parser.checkingFunction();
 
-		testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, it now uses sokcets and file descriptor instead of rawString
+		testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, needs parser.servers too
 
 		server_sockets.initSockets(parser.servers);
 		poller.initPoll(server_sockets.server_fds);
 
+		int curr_nfds;
 		for (;;) {
-			poller.processPoll();
+			curr_nfds = poller.nfds;
+			poller.processPoll(curr_nfds);
 
 			// check which fds in poll_fds are ready
-			for (int i = 0; i < poller.nfds; ++i) {
+			for (int i = 0; i < curr_nfds; ++i) {
 
 				bool is_server = connection.isServerFd(poller.poll_fds[i].fd,
 					server_sockets.server_fds);
 
-				if (poller.skipFd(is_server, i)) continue;
+				if (poller.skipFd(is_server, i, curr_nfds)) continue;
 
 				if (is_server) {
 					connection.handleServerFd(poller.poll_fds[i].fd, poller);
 				}
 				else {
 					Response response;
-					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers); //call parser.servers
+					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers); //now needs parser.servers to work
 					if (request.isValid) {
 						printRequest(request);
 						response.chooseServer(poller.poll_fds[i].fd, request, parser.servers);
 						response.formResponse(request, webserv);
 						response.sendResponse(poller.poll_fds[i].fd);
 					}
-					poller.removeFd(i);
+					poller.removeFd(i, curr_nfds);
 				}
 			}
+			poller.compressFdArr();
 		}
 
 	} catch (const std::exception& e) {

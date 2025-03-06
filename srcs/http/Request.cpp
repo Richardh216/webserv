@@ -3,12 +3,8 @@
 /*
 TODO
 
-- integrate into school version, there has been a new pull, this is outdated kinda
-
-match socket to server and get client_max_body_size from there
 1. use client_max_body_size directive from the config file
 when saving the body, if not specified use default value
-1.5. chooseServer function, maybe call in parsing or implement partially/modify, need to find host for it
 
 2. check what error to throw and how to handle client_max_body_size once recieved via function call
 
@@ -191,7 +187,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 		hostValue = it->second;
 	} else {
 		// Handle missing "Host" header
-		std::cout << "MISSING HOST OMG WHAT TO DO NOW" << std::endl;
+		std::cout << "missing host" << std::endl;
 	}
 
 	serverConfig	currentServer = selectServer(request.poll_fd.fd, servers, hostValue);

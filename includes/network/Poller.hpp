@@ -13,9 +13,10 @@ class Poller
 		struct pollfd poll_fds[MAX_FDS_POLL];
 
 		void	initPoll(std::vector<int> &server_fds);
-		bool	skipFd(bool is_server, int& fd_index);
-		void	processPoll();
-		void	removeFd(int& fd_index);
+		bool	skipFd(bool is_server, int fd_index, int curr_nfds);
+		void	processPoll(int curr_nfds);
+		void	removeFd(int fd_index, int curr_nfds);
+		void	compressFdArr();
 };
 
 #endif

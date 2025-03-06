@@ -25,36 +25,41 @@ void	Poller::initPoll(std::vector<int> &server_fds)
 	}
 }
 
-void	Poller::processPoll()
+void	Poller::processPoll(int curr_nfds)
 {
-	if (poll(poll_fds, nfds, TIMEOUT) == -1)
+	if (poll(poll_fds, curr_nfds, TIMEOUT) == -1)
 		std::cerr << "poll() failed: " << strerror(errno) << std::endl;
 }
 
-void	Poller::removeFd(int& fd_index)
+void	Poller::removeFd(int fd_index, int curr_nfds)
 {
-	if (fd_index < 0 || fd_index >= nfds) return;
-
+	if (fd_index < 0 || fd_index >= curr_nfds) return;
 	close(poll_fds[fd_index].fd);
-
-	for (int i = fd_index; i < nfds - 1; ++i) {
-		poll_fds[i] = poll_fds[i + 1];
-	}
-	nfds--;
-	fd_index--;
+	poll_fds[fd_index].fd = -1;
 }
 
-bool	Poller::skipFd(bool is_server, int& fd_index)
+bool	Poller::skipFd(bool is_server, int fd_index, int curr_nfds)
 {
-	(void)is_server;
-	if (poll_fds[fd_index].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-		//if (!is_server) removeFd(fd_index); ???
+	if (poll_fds[fd_index].revents & (POLLERR)) {
+		if (!is_server) removeFd(fd_index, curr_nfds);
 		return true;
 	}
 	if (!(poll_fds[fd_index].revents & POLLIN)) {
-		//if (!is_server) removeFd(fd_index); ???
+		if (!is_server) removeFd(fd_index, curr_nfds);
 		return true;
 	}
-
 	return false;
+}
+
+void	Poller::compressFdArr()
+{
+	int new_nfds = 0;
+
+	for (int i = 0; i < nfds; ++i) {
+		if (poll_fds[i].fd != -1) {
+			poll_fds[new_nfds] = poll_fds[i];
+			new_nfds++;
+		}
+	}
+	nfds = new_nfds;
 }
