@@ -1,0 +1,25 @@
+A Simpler, More Common Approach
+One common strategy in event-driven servers is to associate a state (including a buffer and a timestamp) with each client connection. For example:
+1. Connection State Object:Create a structure (or class) for each client connection that includes:
+	* The file descriptor.
+	* A buffer (e.g., std::string or std::vector<char>) for storing partial request data.
+	* A timestamp for the last activity (to check for timeouts).
+2. Event Loop Integration:
+	* When poll() indicates a client FD is ready for reading, look up its connection state.
+	* Call recv() to read new data and append it to the connection’s buffer.
+	* Run your HTTP parser on the entire buffer.
+	* If the parser returns a complete request:
+		* Process it.
+		* Clear the buffer (or remove the processed part) from the connection state.
+	* If the parser returns that the request is incomplete:
+		* Leave the buffer as is.
+		* Update the timestamp.
+		* Wait for more data on the next poll() event.
+3. Timeout Check:
+	* Periodically (or on every poll cycle), check the timestamps in your connection states.
+	* If a connection’s buffer has been waiting too long without new data, close the connection (bounce the client) and remove its state.
+
+Advantages of This Approach:
+* Simplicity:Each connection is self-contained. You don’t need a separate vector just to manage pending requests; instead, each connection’s state naturally holds its partial data.
+* Scalability:It’s easier to manage timeouts and resumptions per connection.
+* Compliance:Since you always call recv() only when poll() tells you the FD is ready, you’re following the requirements strictly.

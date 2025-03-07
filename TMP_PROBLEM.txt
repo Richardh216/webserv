@@ -1,84 +1,60 @@
-#include "../../includes/webserv.hpp"
+I'm having a complex problem that I'm trying to understand, I'm not sure if I have a problem in the first place, but if I do, I'm not sure that the current way to go about fixing it is the best
 
-/*
-TODO
+So:
 
-1. (done) use client_max_body_size directive from the config file
-when saving the body, if not specified use default value
+I have this in my project requirements:
 
-2. (done) headers parsed bool might be set too early, check
+Your server must never block and the client can be bounced properly if necessary.
+• It must be non-blocking and use only 1 poll() (or equivalent) for all the I/O
+operations between the client and the server (listen included).
+• poll() (or equivalent) must check read and write at the same time.
+• You must never do a read or a write operation without going through poll() (or
+equivalent).
+• Checking the value of errno is strictly forbidden after a read or a write operation
+Because you have to use non-blocking file descriptors, it is
+possible to use read/recv or write/send functions with no poll()
+(or equivalent), and your server wouldn’t be blocking.
+But it would consume more system resources.
+Thus, if you try to read/recv or write/send in any file descriptor
+without using poll() (or equivalent), your grade will be 0.
 
-3. (done) check error codes when encoutering an error, create error code var and send it
+I think right now my code calls recv() sometimes when it doesn't find any more data, and immediately flags it as an error if recv() returns -1, which might just be waiting for more data from the client, so it shouldn't be considered invalid immediately right?
 
-4. (done) Implement client_max_body_size, we are able to get the value now, banger
-4.5 (done) still needs to have a default option if it is -1, or non existant, uses -1 to set it to a default value
+My current implementation:
+server_sockets.initSockets(parser.servers);
+		poller.initPoll(server_sockets.server_fds);
 
-5. (done?) handle case where there is a body, but no content-length, or chunked-transfer-encoding
-http 1.1 needs length defined, 1.0 apparetly can read until connection is closed
+		int curr_nfds;
+		for (;;) {
+			curr_nfds = poller.nfds;
+			poller.processPoll(curr_nfds);
 
-6 .check error handling when parsing client_max_body_size
+			// check which fds in poll_fds are ready
+			for (int i = 0; i < curr_nfds; ++i) {
 
-7. split up the function into smaller chunks
+				bool is_server = connection.isServerFd(poller.poll_fds[i].fd,
+					server_sockets.server_fds);
 
-*/
+				if (poller.skipFd(is_server, i, curr_nfds)) continue;
 
-serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue) {
-	struct sockaddr_in	client_address;
-	socklen_t			add_len = sizeof(client_address);
-
-	if (getsockname(fd, (struct sockaddr*)&client_address, &add_len) == -1) {
-		throw std::runtime_error("Failed to get socket name");
-	}
-
-	serverConfig *first_match = nullptr;
-	for (auto &server : servers) {
-		if (client_address.sin_port == server.bind_addr.sin_port
-			&& (client_address.sin_addr.s_addr == server.bind_addr.sin_addr.s_addr
-			|| server.bind_addr.sin_addr.s_addr == INADDR_ANY)) { //INADDR_ANY: also allows 0.0.0.0, can use just 0 instead
-				if (!first_match) {
-					first_match = &server;
+				if (is_server) {
+					connection.handleServerFd(poller.poll_fds[i].fd, poller);
 				}
-				for (const auto &name : server.serverNames) {
-					if (name == hostValue) {
-						first_match = &server;
-						return *first_match;
+				else {
+					Response response;
+					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers); 
+					if (request.isValid) {
+						printRequest(request);
+						response.chooseServer(poller.poll_fds[i].fd, request, parser.servers);
+						response.formResponse(request, webserv);
+						response.sendResponse(poller.poll_fds[i].fd);
 					}
+					poller.removeFd(i, curr_nfds);
 				}
 			}
-	}
-	if (!first_match) {
-		throw std::runtime_error("No matching server configuration found");
-	}
-	return *first_match;
-}
+			poller.compressFdArr();
 
-/*
-Regarding recv() calls:
-	- If the socket is non-blocking, recv() will return immediately if there's no data
-
-	check recv() error codes when to throw an error and when to just retur, with a flag maybe, jsut assumo no data first
-
-	find a solution to how to parse each client seperately, have an ID for them,
-
-	have a dynamically allocated vector of requests, if FD is ready for read once again
-		-fd revents becomes POLLIN if there is data to read
-		- parser is only called when socket is ready for read
-
-just save and return partially saved requests, and continue them, skip what is done
-
-have flags for how much was read, 
-
-have a falg couldBePending and current time when read fails, return both
-save exact position when returning
-
-if same requests failed 5 times then assume invalid request
-
-	when recv return -1 means no more data, nt necessarily an error, return the request as is and save it with associated fd
-	we need to call recv 
-
-maybe check when the last action came from the client?
-
-*/
+this is my main loop, the HTTP request parser only gets called if the socket is already ready for reading, however, it doesn't bounce between clients. it always handles one, and sometimes might throw errors prematurely I think, here is my parsing implementation:
 
 HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) { //add pending reqeusts vector
 	std::string			rawRequest;
@@ -379,7 +355,7 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 			size_t chunkDataStart = lineEnd + delimLen; //Move past the chunk size line (and its CRLF)
 			// Ensure the entire chunk and its trailing CRLF are available
 			while (rawRequest.size() < chunkDataStart + chunkSize + delimLen) { //If rawRequest is too short, call recv() to read more data from the socket
-				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0); //just save the metadata and return it, if it needs it could get called again
+				bytesRead = recv(clientFd, buffer.data(), BUFFER_SIZE, 0);
 				if (bytesRead <= 0) {
 					request.isValid = false;
 					request.errorCodes[400] = "Bad Request";
@@ -420,147 +396,61 @@ HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers) {
 	return request;
 }
 
-void testParseHttpRequest(std::vector<serverConfig>& servers) {
+My idea of solving this problem, so that my server can bounce clients properly, and won't hang, even though it would have been non-blocking, goes like this:
+
+Basically, in my parser I would just return the current state the request is in if it fails to read more data, along with how many bytes it read and where exactly in the request it is, along with the current time for when it was returned, so that this time could be used to check if a timeout happened, then in the main server loop, after calling the parser, I would have a flag called isPending, which would have been set by the parser, if a request has the isPending flag, that means that it was returned with the current state of the request and timestamp, this request would then get added to the vector of requests, let's call it pendingRequests, that would check when an fd is ready for reading again, then it would look for that fd in the vector pendingRequests, if it finds a request that has been matched with that fd, it will call the parser again, and the parser would take that partial request + the pendingRequests vector, so it would't assign the fd again to the wrong request? May be unnecessary?, have multiple checks to identify if it is a new/partial request, then it would try to continue where it left off, making sure it only calls recv() once per call, so as to adhere to the subject and only call recv() once it went through poll(), then if the request is parsed correctly it will get removed, however if it is still incorrect and the client is not trying to send more data, as in the fd is not ready to read more data the client and it's request will time out and it will be considered an invalid request
+
+here are some comments I made on how I could try to implement it in the main loop:
 
 
-	// std::string httpRequest = //one for delete
-	// "DELETE /users/123 HTTP/1.1\r\n"
-	// "Host: example.com\r\n"
-	// "User-Agent: MyClient/1.0\r\n"
-	// "\r\n";
 
-	// std::string httpRequest = //one for get
-	// "GET /users/123 HTTP/1.1\r\n"
-	// "Host: example.com\r\n"
-	// "User-Agent: MyClient/1.0\r\n"
-	// "Accept: application/json\r\n"
-	// "\r\n";
+// check which fds in poll_fds are ready
+			for (int i = 0; i < curr_nfds; ++i) {
 
-	// std::string httpRequest = //chunked complex normal
-	// 	"POST /api/data HTTP/1.1\r\n"
-	// 	"Host: example.com\r\n"
-	// 	"User-Agent: ChunkedClient/1.0\r\n"
-	// 	"Content-Type: application/json\r\n"
-	// 	"Transfer-Encoding: chunked\r\n"
-	// 	"\r\n"
-	// 	"4\r\n"
-	// 	"{\"na\r\n"
-	// 	"6\r\n"
-	// 	"me\": \"\r\n"
-	// 	"6\r\n"
-	// 	"John D\r\n"
-	// 	"4\r\n"
-	// 	"oe\",\r\n"
-	// 	"3\r\n"
-	// 	"\"em\r\n"
-	// 	"5\r\n"
-	// 	"ail\":\r\n"
-	// 	"5\r\n"
-	// 	"\"john\r\n"
-	// 	"6\r\n"
-	// 	".doe@r\n"
-	// 	"7\r\n"
-	// 	"example\r\n"
-	// 	"6\r\n"
-	// 	".com\",\r\n"
-	// 	"3\r\n"
-	// 	"\"ag\r\n"
-	// 	"6\r\n"
-	// 	"e\": 3}\r\n"
-	// 	"0\r\n"
-	// 	"\r\n";
+				bool is_server = connection.isServerFd(poller.poll_fds[i].fd,
+					server_sockets.server_fds);
 
-	std::string httpRequest = //chunked complex just \n
-		"POST /api/data HTTP/1.1\n"
-		"Host: example.com\n"
-		"User-Agent: ChunkedClient/1.0\n"
-		"Content-Type: application/json\n"
-		"Transfer-Encoding: chunked\n"
-		"\n"
-		"4\n"
-		"{\"na\n"
-		"6\n"
-		"me\": \"\n"
-		"6\n"
-		"John D\n"
-		"4\n"
-		"oe\",\n"
-		"3\n"
-		"\"em\n"
-		"5\n"
-		"ail\":\n"
-		"5\n"
-		"\"john\n"
-		"6\n"
-		".doe@r\n"
-		"7\n"
-		"example\n"
-		"6\n"
-		".com\",\n"
-		"3\n"
-		"\"ag\n"
-		"6\n"
-		"e\": 3}\n"
-		"0\n"
-		"\n";
+				if (poller.skipFd(is_server, i, curr_nfds)) continue;
 
-	// std::string httpRequest = // just \n instead of \r\n test
-	// 	"POST /api/data HTTP/1.1\n"
-	// 	"Host: api.example.com\n"
-	// 	"User-Agent: MyTestClient/2.0\n"
-	// 	"cOnTEnt-type: application/json\n"
-	// 	"Accept: application/json\n"
-	// 	"Authorization: Bearer abcdef123456\n"
-	// 	"cOnTEnt-lEngtH: 53\n"
-	// 	"\n"
-	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
+				if (is_server) {
+					connection.handleServerFd(poller.poll_fds[i].fd, poller);
+				}
+				else {
+					Response response;
+					/** loop for pending requests, sockets always ready for reading, 
+					 * if it matches a socket with a pendig request
+					 * then call the parser again with the current state of the request, + the vector of pending lists (may not be needed if the fd it gets caled with is the one we need)
+					 * if fd is inside penidng reqeusts, pick up from where it left off
+					 * create timeout timer when returning
+					 * 
+					 * 
+					 * 
+					 * std::vector<HttpRequest*> pendingRequests;
+					 * 
+					 * int fd = poller.poll_fds[i].fd; //assume ready for reading, clients wants to send more data
+					 * 
+					 * find a request with the 'fd' that is now ready to recieve data
+					 * 		if there is no such request just treat it as a new request, and call the parser normally to handle the fd that is now ready to read:  
+					 			HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers);
+					 * 		else, if the list of pendingRequests has the fd that is now ready, send the current data we have a bout the request and call the parser again
+					 * 			curr_request = found request
+					 * 		else 
+					 * 			timeout maybe?
+					 * 
+					 * 
+					 * 		
+					 */
+					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers); //now needs parser.servers to work
+					// if (request.isPending)// add to vec if pending request
+					if (request.isValid) {
+						printRequest(request);
+						response.chooseServer(poller.poll_fds[i].fd, request, parser.servers);
+						response.formResponse(request, webserv);
+						response.sendResponse(poller.poll_fds[i].fd);
+					}
+					poller.removeFd(i, curr_nfds); //remove request from vec of requests too if valid
+				}
+			}
+			poller.compressFdArr();
 
-	// std::string httpRequest = //content-length
-	// 	"POST /api/data HTTP/1.1\r\n"
-	// 	"Host: api.example.com\r\n"
-	// 	"User-Agent: MyTestClient/2.0\r\n"
-	// 	"cOnTEnt-type: application/json\r\n"
-	// 	"Accept: application/json\r\n"
-	// 	"Authorization: Bearer abcdef123456\r\n"
-	// 	"cOnTEnt-lEngtH: 53\r\n"
-	// 	"\r\n"
-	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
-
-	int sv[2];
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1) {
-		perror("socketpair");
-		exit(EXIT_FAILURE);
-	}
-		
-	// Write the HTTP request to one end of the socketpair.
-	ssize_t n = write(sv[1], httpRequest.c_str(), httpRequest.size());
-	std::cout << "Bytes written to socketpair: " << n << "\n";
-
-	// Signal EOF on the writing end.
-	shutdown(sv[1], SHUT_WR);
-		
-	// Directly call parseHttpRequest using the reading end of the socketpair.
-	HttpRequest request = parseHttpRequest(sv[0], servers);
-
-	if (!request.errorCodes.empty()) {
-		std::cout << " Error Codes:\n";
-		for (const auto &errorCode : request.errorCodes) {
-			std::cout << "  " << errorCode.first << " -> " << errorCode.second << "\n";
-		}
-	}
-
-	// Output parsed results.
-	std::cout << "\npoll_fd: " << request.poll_fd.fd << "\n";
-	std::cout << "\nMethod: " << request.method << "\n";
-	std::cout << "Path: " << request.path << "\n";
-	std::cout << "HTTP Version: " << request.httpVersion << "\n";
-	for (const auto& header : request.headers) {
-		std::cout << header.first << ": " << header.second << "\n";
-	}
-	if (!request.body.empty()) {
-		std::cout << "Body: " << request.body << "\n";
-	}
-		
-	close(sv[0]);
-	close(sv[1]);
-}
+can you help me think of other simpler ways to implement it, what I need to implement, do I need to implement it? If yes is my approach good, could it work? I yes how should I go about solving it?

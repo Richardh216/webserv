@@ -17,10 +17,11 @@ struct HttpRequest {
 	std::string	httpVersion;
 	std::map<std::string, std::string>	headers;
 	std::string	body;
-	bool	isValid = true;
+	bool	isValid = true; //change it to be treated as false by default
 	std::string	errorMessage; //might be redundant
 	bool	headersParsed = false;
 	struct	pollfd	poll_fd;
+	// bool	isPending;
 	std::map<int, std::string>	errorCodes;
 };
 
