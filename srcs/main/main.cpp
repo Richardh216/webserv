@@ -30,6 +30,7 @@ int	main(int argc, char **argv)
 	Sockets			server_sockets;
 	Poller			poller;
 	Connection		connection;
+	std::unordered_map<int, connectionState>	connectionStates; //fd is the key
 
 	webserv.config_path = getConfigPath(argc, argv);
 	initStatusCodeInfo(webserv.status_code_info);
@@ -40,7 +41,7 @@ int	main(int argc, char **argv)
 		parser.parseConfigFile(webserv.config_path); //no prints, needs checking called after
 		parser.checkingFunction();
 
-		// testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, needs parser.servers too
+		testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, needs parser.servers too
 
 		server_sockets.initSockets(parser.servers);
 		poller.initPoll(server_sockets.server_fds);
@@ -63,18 +64,45 @@ int	main(int argc, char **argv)
 				if (is_server && poller.isFdReadable(i)) {
 					connection.handleServerFd(fd, poller);
 				}
-
+				//fd ready for reading
 				if (!is_server && poller.isFdReadable(i)) {
-					HttpRequest request = parseHttpRequest(fd, parser.servers); //now needs parser.servers to work
-
+					if (connectionStates.find(fd) == connectionStates.end()) {
+						connectionStates[fd] = { fd, "", std::chrono::steady_clock::now(), false, 0};
+					}
+					connectionState &state = connectionStates[fd];
+					//implement a function to set BUFFER_SIZE from client_max_body_size here, and read data
+					//maybe implement this in a seperat "read" function
+					char	tmpBuf[4096];
+					ssize_t	bytesRead = recv(fd, tmpBuf, sizeof(tmpBuf), 0);
+					if (bytesRead > 0) {
+						state.buffer.append(tmpBuf, bytesRead);
+						state.lastActivity = std::chrono::steady_clock::now();
+					} else if (bytesRead == 0) { //client closed connection
+						close(fd); //remove it
+						connectionStates.erase(fd);
+						poller.removeFd(i, curr_nfds);
+						continue;
+					} else { //for non-blocking mode, if no data is available bytesRead could be -1
+						//we simply skip fd until the next poll
+						continue;
+					}
+					//try to parse HTTP request from the accumulated buffer
+					HttpRequest	request = parseHttpRequestFromBuffer(state.buffer, fd, parser.servers); //new way
+					// HttpRequest request = parseHttpRequest(fd, parser.servers); //old way
 					poller.addWriteEvent(i);
-					if (request.isValid) {
+					// if (request.isValid) { //old way to check
+					if (request.isComplete) {
 						Response *response = new Response();
 						webserv.responses.push_back(response);
 						response->setFd(fd);
 						printRequest(request);
 						response->chooseServer(request, parser.servers);
 						response->formResponse(request, webserv);
+						//may be better to remove later
+						connectionStates.erase(fd); // remove state for this fd since request has been handled
+					} else {
+						//request still incomplete, state remains in connectionStates
+						// Optionally: if the state has been pending too long, time it out and close the connection.
 					}
 				}
 
@@ -93,6 +121,8 @@ int	main(int argc, char **argv)
 						if (is_sent) {
 							delete response;
 							webserv.responses.erase(it);
+							//may be better to remove sooner
+							// connectionStates.erase(fd); // remove state for this fd since request has been handled
 							poller.removeFd(i, curr_nfds);
 							poller.removeWriteEvent(i);
 						}
@@ -101,6 +131,7 @@ int	main(int argc, char **argv)
 
 			}
 			poller.compressFdArr();
+			// Optionally: iterate over g_connectionStates and close connections that have been idle too long.
 		}
 
 	} catch (const std::exception& e) {

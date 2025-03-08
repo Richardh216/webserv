@@ -17,16 +17,18 @@ struct HttpRequest {
 	std::string	httpVersion;
 	std::map<std::string, std::string>	headers;
 	std::string	body;
-	bool	isValid = true; //change it to be treated as false by default
-	std::string	errorMessage; //might be redundant
+	// bool	isValid true;
+	bool	isValid; //just don't set it prematurely
+	bool	isComplete = false;
+	// std::string	errorMessage; //might be redundant
 	bool	headersParsed = false;
 	struct	pollfd	poll_fd;
-	// bool	isPending;
 	std::map<int, std::string>	errorCodes;
 };
 
 serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue);
 HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers);
 void		testParseHttpRequest(std::vector<serverConfig>& servers);
+HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<serverConfig>& servers);
 
 #endif

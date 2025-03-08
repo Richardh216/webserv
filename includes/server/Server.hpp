@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <netinet/in.h>
+#include <chrono>
+#include <unordered_map>
 
 struct Route {
 	std::string	path;
@@ -31,6 +33,14 @@ struct serverConfig {
 	std::string		root;
 	std::vector<Route> routes;
 	struct sockaddr_in	bind_addr; // for Sockets::bindSocket()
+};
+
+struct connectionState {
+	int			fd;
+	std::string	buffer; //raw request data, could be partial
+	std::chrono::steady_clock::time_point	lastActivity; //time of the last read
+	bool		isPending; //if the parsing returned, without throwing an error
+	int			timesFailed; //how many times it tried to parse
 };
 
 #endif
