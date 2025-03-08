@@ -6,6 +6,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <climits>
 #include <algorithm>
 #include <stdexcept>
 

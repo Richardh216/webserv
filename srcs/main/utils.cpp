@@ -2,7 +2,7 @@
 
 std::string getConfigPath(int argc, char **argv)
 {
-	std::string	path = "./webserv.conf"; // define a default path
+	std::string	path = "./srcs/main/default.conf"; // define a default path
 
 	if (argc > 1)
 		path = argv[1];

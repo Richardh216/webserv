@@ -40,7 +40,7 @@ int	main(int argc, char **argv)
 		parser.parseConfigFile(webserv.config_path); //no prints, needs checking called after
 		parser.checkingFunction();
 
-		testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, needs parser.servers too
+		// testParseHttpRequest(parser.servers); //prints the tests for HTTP parsing, needs parser.servers too
 
 		server_sockets.initSockets(parser.servers);
 		poller.initPoll(server_sockets.server_fds);
@@ -52,50 +52,53 @@ int	main(int argc, char **argv)
 
 			// check which fds in poll_fds are ready
 			for (int i = 0; i < curr_nfds; ++i) {
+				int fd = poller.poll_fds[i].fd;
+				bool is_server = connection.isServerFd(fd, server_sockets.server_fds);
 
-				bool is_server = connection.isServerFd(poller.poll_fds[i].fd,
-					server_sockets.server_fds);
-
-				if (poller.skipFd(is_server, i, curr_nfds)) continue;
-
-				if (is_server) {
-					connection.handleServerFd(poller.poll_fds[i].fd, poller);
+				if (poller.isFdBad(i)) {
+					poller.removeFd(i, curr_nfds);
+					continue;
 				}
-				else {
-					Response response;
-					/** loop for pending requests, sockets always ready for reading, 
-					 * if it matches a socket with a pendig request
-					 * then call the parser again with the current state of the request, + the vector of pending lists (may not be needed if the fd it gets caled with is the one we need)
-					 * if fd is inside penidng reqeusts, pick up from where it left off
-					 * create timeout timer when returning
-					 * 
-					 * 
-					 * 
-					 * std::vector<HttpRequest*> pendingRequests;
-					 * 
-					 * int fd = poller.poll_fds[i].fd; //assume ready for reading, clients wants to send more data
-					 * 
-					 * find a request with the 'fd' that is now ready to recieve data
-					 * 		if there is no such request just treat it as a new request, and call the parser normally to handle the fd that is now ready to read:  
-					 			HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers);
-					 * 		else, if the list of pendingRequests has the fd that is now ready, send the current data we have a bout the request and call the parser again
-					 * 			curr_request = found request
-					 * 		else 
-					 * 			timeout maybe?
-					 * 
-					 * 
-					 * 		
-					 */
-					HttpRequest request = parseHttpRequest(poller.poll_fds[i].fd, parser.servers); //now needs parser.servers to work
-					// if (request.isPending)// add to vec if pending request
+
+				if (is_server && poller.isFdReadable(i)) {
+					connection.handleServerFd(fd, poller);
+				}
+
+				if (!is_server && poller.isFdReadable(i)) {
+					HttpRequest request = parseHttpRequest(fd, parser.servers); //now needs parser.servers to work
+
+					poller.addWriteEvent(i);
 					if (request.isValid) {
+						Response *response = new Response();
+						webserv.responses.push_back(response);
+						response->setFd(fd);
 						printRequest(request);
-						response.chooseServer(poller.poll_fds[i].fd, request, parser.servers);
-						response.formResponse(request, webserv);
-						response.sendResponse(poller.poll_fds[i].fd);
+						response->chooseServer(request, parser.servers);
+						response->formResponse(request, webserv);
 					}
-					poller.removeFd(i, curr_nfds); //remove request from vec of requests too if valid
 				}
+
+				if (!is_server && poller.isFdWriteable(i)) {
+					Response *response = nullptr;
+					auto it = webserv.responses.begin();
+					for (; it != webserv.responses.end(); ++it) {
+						if ((*it)->getFd() == poller.poll_fds[i].fd) {
+							response = *it;
+							break;
+						}
+					}
+					bool is_sent = false;
+					if (response && response->getIsFormed()) {
+						is_sent = response->sendResponse();
+						if (is_sent) {
+							delete response;
+							webserv.responses.erase(it);
+							poller.removeFd(i, curr_nfds);
+							poller.removeWriteEvent(i);
+						}
+					}
+				}
+
 			}
 			poller.compressFdArr();
 		}

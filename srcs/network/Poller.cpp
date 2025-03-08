@@ -38,17 +38,27 @@ void	Poller::removeFd(int fd_index, int curr_nfds)
 	poll_fds[fd_index].fd = -1;
 }
 
-bool	Poller::skipFd(bool is_server, int fd_index, int curr_nfds)
+bool	Poller::isFdBad(int fd_index)
 {
-	if (poll_fds[fd_index].revents & (POLLERR)) {
-		if (!is_server) removeFd(fd_index, curr_nfds);
-		return true;
-	}
-	if (!(poll_fds[fd_index].revents & POLLIN)) {
-		if (!is_server) removeFd(fd_index, curr_nfds);
-		return true;
-	}
-	return false;
+	return poll_fds[fd_index].revents & (POLLERR | POLLHUP);
+}
+
+bool	Poller::isFdReadable(int fd_index)
+{
+	return poll_fds[fd_index].revents & POLLIN;
+}
+
+bool	Poller::isFdWriteable(int fd_index)
+{
+	return poll_fds[fd_index].revents & POLLOUT;
+}
+
+void	Poller::addWriteEvent(int fd_index) {
+	poll_fds[fd_index].events |= POLLOUT;
+}
+
+void	Poller::removeWriteEvent(int fd_index) {
+	poll_fds[fd_index].events &= ~POLLOUT;
 }
 
 void	Poller::compressFdArr()

@@ -3,6 +3,7 @@
 
 #include <ctime>
 #include <sys/stat.h>
+#include <filesystem>
 
 struct Webserv;
 struct HttpRequest;
@@ -12,6 +13,10 @@ class Response
 	private:
 		serverConfig	*choosed_server = nullptr;
 		struct Route	*choosed_route = nullptr;
+		bool			is_formed = false;
+		int				fd;
+		int				total_bytes_sent = 0;
+		bool			headers_sent = false;
 
 		std::string http_version;
 		std::string status_code;
@@ -36,14 +41,21 @@ class Response
 		std::string takeGMTTime();
 		std::string checkLastWriteTime(const char *path);
 
+		//handle post method
+		void	handlePOST(const HttpRequest &request, const Webserv &webserv);
+
 	public:
 		std::string findHeaderValue(const std::string& name,
 			const std::map<std::string, std::string>& headers) const;
-		void	chooseServer(int fd, const HttpRequest& request,
+		void	chooseServer(const HttpRequest& request,
 			std::vector<serverConfig>& servers);
 
 		void	formResponse(const HttpRequest& request, const Webserv& webserv);
-		void	sendResponse(int socket_fd);
+		int		sendResponse();
+		int		sendChunk(const std::string& chunk);
+		bool	getIsFormed() const;
+		int		getFd() const;
+		void	setFd(int fd);
 };
 
 #endif
