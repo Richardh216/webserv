@@ -23,10 +23,8 @@ struct Route {
 };
 
 struct serverConfig {
-	std::string	port; //chnaged to handle multiple listen directives
-	std::string	host; //chnaged to handle multiple listen directives
-	// std::vector<std::string>	port;
-	// std::vector<std::string>	host;
+	std::string	port;
+	std::string	host;
 	std::vector<std::string>	serverNames;
 	std::map<int, std::string>	errorPages;
 	int	client_max_body_size = -1; //to represent default value
@@ -40,7 +38,6 @@ struct connectionState {
 	std::string	buffer; //raw request data, could be partial
 	std::chrono::steady_clock::time_point	lastActivity; //time of the last read
 	bool		isPending; //if the parsing returned, without throwing an error
-	int			timesFailed; //how many times it tried to parse
 };
 
 #endif

@@ -8,6 +8,7 @@
 #include <regex>
 #include <set>
 #include <poll.h>
+#include "../network/Poller.hpp"
 
 struct serverConfig;
 
@@ -17,18 +18,16 @@ struct HttpRequest {
 	std::string	httpVersion;
 	std::map<std::string, std::string>	headers;
 	std::string	body;
-	// bool	isValid true;
-	bool	isValid; //just don't set it prematurely
+	bool	isValid; //just don't set it yet
 	bool	isComplete = false;
-	// std::string	errorMessage; //might be redundant
 	bool	headersParsed = false;
 	struct	pollfd	poll_fd;
 	std::map<int, std::string>	errorCodes;
 };
 
 serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue);
-HttpRequest	parseHttpRequest(int clientFd, std::vector<serverConfig>& servers);
-void		testParseHttpRequest(std::vector<serverConfig>& servers);
 HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<serverConfig>& servers);
+void 		timeOutCheck(int curr_nfds, std::unordered_map<int, connectionState>& connectionStates, Poller& poller);
+void		testParseHttpRequest(std::vector<serverConfig>& servers);
 
 #endif
