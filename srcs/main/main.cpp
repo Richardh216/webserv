@@ -81,7 +81,7 @@ int	main(int argc, char **argv)
 						state.buffer.clear(); //clear buffer
 						close(fd); //remove it
 						connectionStates.erase(fd);
-						poller.removeFd(i, curr_nfds);
+						poller.removeFd(i, curr_nfds); // I close fd also here - is this a problem ?
 						continue;
 					} else { //for non-blocking mode, if no data is available bytesRead could be -1
 						//we simply skip fd until the next poll

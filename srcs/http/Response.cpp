@@ -62,6 +62,7 @@ void	Response::formResponse(const HttpRequest& request, const Webserv& webserv)
 	addHeader("Server", "webserv/0.01");
 	addHeader("Connection", "close");
 
+	this->request_path = request.path;
 	findRouteInConfig(request.path);
 	if (choosed_route && !choosed_route->redirection.empty()) {
 		redirect(webserv);
@@ -342,7 +343,7 @@ void	Response::generateAutoindexHTML(const std::string& full_path, const Webserv
 				border-bottom: 1px solid rgba(255, 255, 255, 0.2);}
 			.name {width: 250px;text-align: left;}
 			.date {width: 150px;text-align: left;}
-			.size {width: 100px;text-align: right;}}
+			.size {width: 100px;text-align: right;}
 		</style>
 	</head><body><h2>Index of )" + main_dir + R"(</h2><div class="container">)";
 
@@ -350,6 +351,8 @@ void	Response::generateAutoindexHTML(const std::string& full_path, const Webserv
 	if (dir_path.has_parent_path()) // exclude going out of the root (correct ?)
 		body += R"(<a href="../">../</a>)";
 
+	if (!request_path.empty() && request_path.back() != '/')
+		request_path += "/";
 	try {
 
 		for (const auto& entry : std::filesystem::directory_iterator(dir_path)) {
@@ -362,7 +365,7 @@ void	Response::generateAutoindexHTML(const std::string& full_path, const Webserv
 
 			std::string date = checkLastWriteTime(entry.path().c_str());
 
-			body += "<div class=\"entry\"><a class=\"name\" href=\""
+			body += "<div class=\"entry\"><a class=\"name\" href=\"" + request_path
 				+ filename + "\">" + filename + "</a><span class=\"date\">"
 				 + date + "</span><span class=\"size\">" + file_size + "</span></div>";
 		}
