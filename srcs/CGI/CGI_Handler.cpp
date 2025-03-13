@@ -1,11 +1,14 @@
 #include "CGI_Handler.hpp"
 
-CgiHandler::CgiHandler(const HttpRequest &request, const Webserv &webserv, std::string scriptPath) : _scriptPath(scriptPath)
+CgiHandler::CgiHandler(const HttpRequest &request, const Webserv &webserv, std::string scriptPath)
 {
 	(void)webserv;
-    this->_env["Request-Method"] = request.method;
-    this->_env["Content-Length"] = request.headers.find("Content-Length")->second;
+    this->_env["REQUEST_METHOD"] = request.method;
+    this->_env["CONTENT_TYPE"] = request.headers.find("Content-Type")->second;
+    this->_env["CONTENT_LENGTH"] = request.headers.find("Content-Length")->second;
+	this->_env["QUERY_STRING"] = getQueryString(request.path);
 
+	_scriptPath = scriptPath;
 	_body = request.body;
 }
 
@@ -14,9 +17,23 @@ CgiHandler::~CgiHandler(void)
 
 }
 
+std::string CgiHandler::getQueryString(std::string path)
+{
+	std::string query;
+
+	if (path.find("?") == std::string::npos)
+		return ("");
+	int i = path.find("?") + 1;
+	while (path[i])
+	{
+		query += path[i];
+		i++;
+	}
+	return (query);
+}
+
 char **CgiHandler::getEnvAsCstrArray(void) const
 {
-	std::cout << _body << std::endl;
 	char **env;
 
 	env = new char*[_env.size() + 1];
@@ -56,9 +73,12 @@ std::string CgiHandler::executeCgi()
 		close(stdinPipe[0]);
 
 		char **envp = getEnvAsCstrArray();
-		execl(_scriptPath.c_str(), _scriptPath.c_str(), nullptr, envp);
+		std::string python = "/Users/ashirzad/homebrew/bin/python3.10";
 
-		perror("execl");
+		char *argv[] = {(char *)python.c_str(), (char *)_scriptPath.c_str(), NULL};
+		execve(python.c_str(), argv, envp);
+
+		perror("execve");
 		exit(1);
 	}
 	else if (pid > 0)

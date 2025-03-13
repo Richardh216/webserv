@@ -1,19 +1,21 @@
-#!/usr/bin/python3
+#!/Users/ashirzad/homebrew/bin/python3.10
 
 import os
 import urllib.parse
 
-server_upload_path = "/upload_files/"
-filesystem_upload_path = "/Users/ashirzad/Desktop/w/website/upload_files/"
+server_upload_path = "/cgi-bin/database/"
+filesystem_upload_path = "/Users/ashirzad/Desktop/webserv/website/cgi-bin/database/"
 
 links = ""
 for file in os.listdir(filesystem_upload_path):
-    file_path = os.path.join(filesystem_upload_path, file)
-    if os.path.isfile(file_path) and not file.startswith("."):
-        encoded_filename = urllib.parse.quote(file)
-        links += f'<a href="{server_upload_path}{encoded_filename}" download><div class="link">{file}</div></a>\n'
+	file_path = os.path.join(filesystem_upload_path, file)
+	if os.path.isfile(file_path) and not file.startswith("."):
+		encoded_filename = urllib.parse.quote(file)
+		links += f'<a href="{server_upload_path}{encoded_filename}" download><div class="link">{file}</div></a>\n'
 
-# Generate the HTML output
+if links == "":
+	links += "<p>no file</p>"
+
 html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -42,8 +42,8 @@ class Response
 		std::string takeGMTTime();
 		std::string checkLastWriteTime(const char *path);
 
-		//handle post method
-		void	handlePOST(const HttpRequest &request, const Webserv &webserv);
+		//handle CGI
+		void	handleCGI(const HttpRequest &request, const Webserv &webserv);
 
 	public:
 		std::string findHeaderValue(const std::string& name,

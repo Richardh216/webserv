@@ -20,6 +20,7 @@ class CgiHandler
 		CgiHandler(const HttpRequest &request, const Webserv &webserv, std::string scriptPath);
 		~CgiHandler(void);
 
+		std::string getQueryString(std::string path);
 		char **getEnvAsCstrArray() const;
 		std::string executeCgi();
 };
