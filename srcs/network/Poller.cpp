@@ -40,7 +40,7 @@ void	Poller::removeFd(int fd_index, int curr_nfds)
 
 bool	Poller::isFdBad(int fd_index)
 {
-	return poll_fds[fd_index].revents & (POLLERR | POLLHUP);
+	return poll_fds[fd_index].revents & (POLLERR | POLLHUP | POLLNVAL);
 }
 
 bool	Poller::isFdReadable(int fd_index)
@@ -50,7 +50,7 @@ bool	Poller::isFdReadable(int fd_index)
 
 bool	Poller::isFdWriteable(int fd_index)
 {
-	return poll_fds[fd_index].revents & POLLOUT;
+	return (poll_fds[fd_index].revents & POLLOUT) != 0;
 }
 
 void	Poller::addWriteEvent(int fd_index) {
@@ -59,6 +59,10 @@ void	Poller::addWriteEvent(int fd_index) {
 
 void	Poller::removeWriteEvent(int fd_index) {
 	poll_fds[fd_index].events &= ~POLLOUT;
+}
+
+void	Poller::removeReadEvent(int fd_index) {
+	poll_fds[fd_index].events &= ~POLLIN;
 }
 
 void	Poller::compressFdArr()

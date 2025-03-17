@@ -13,6 +13,25 @@ seems to work with requests recieved in full, need to check partial requests and
 
 */
 
+int	readFromFd(int fd, ConfigParser& parser, connectionState &state)
+{
+	char	tmpBuf[4096];
+	ssize_t	bytesRead = recv(fd, tmpBuf, sizeof(tmpBuf), 0);
+	if (bytesRead > 0) {
+		state.buffer.append(tmpBuf, bytesRead);
+	} else if (bytesRead == 0) { //client closed connection
+		state.buffer.clear(); //clear buffer
+		parser.connectionStates.erase(fd);
+		return 0;
+	} else { //for non-blocking mode, if no data is available bytesRead could be -1
+		//we simply skip fd until the next poll
+		state.lastActivity = std::chrono::steady_clock::now(); //even if recv fails
+		state.isPending = true; //optional
+		return -1;
+	}
+	return 1;
+}
+
 serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::string hostValue) {
 	struct sockaddr_in	client_address;
 	socklen_t			add_len = sizeof(client_address);
@@ -48,12 +67,16 @@ void timeOutCheck(int curr_nfds, std::unordered_map<int, connectionState>& conne
 	auto now = std::chrono::steady_clock::now();
 
 	for (auto it = connectionStates.begin(); it != connectionStates.end(); ) {
+		if (!it->second.isPending) {
+			++it;
+			continue;
+		}
+
 		std::chrono::duration<double> elapsed = now - it->second.lastActivity;
 		if (elapsed.count() > TIMEOUT_SECONDS) {
 			int fd = it->first;
 			std::cout << "Timeout: Closing connection for fd: " << fd << std::endl; //testing
-			close(fd);
-			
+
 			// Find the correct index in poll_fds
 			for (int i = 0; i < curr_nfds; ++i) {
 				if (poller.poll_fds[i].fd == fd) {
@@ -67,6 +90,24 @@ void timeOutCheck(int curr_nfds, std::unordered_map<int, connectionState>& conne
 			++it;
 		}
 	}
+}
+
+
+std::string UrlDecoding(std::string path)
+{
+	std::string decoded_path;
+
+	for(size_t i = 0; i < path.size(); i++)
+	{
+		if (path[i] == '%' && path[i + 2]){
+			std::string hex = path.substr(i + 1, 2);
+			decoded_path += (int)strtol(hex.c_str(), NULL, 16);
+			i += 2;
+		}
+		else
+			decoded_path += path[i];
+	}
+	return (decoded_path);
 }
 
 HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<serverConfig>& servers) {
@@ -102,6 +143,7 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 		request.isValid = false;
 		request.errorCodes[400] = "Bad Request";
 		request.isComplete = true; //consider it complete so connection can be closed
+		return request;
 	}
 	//remove trailin '\r' if it exists, check if uniform delimlen is still needed
 	// if (!line.empty() || line.back() == '\r') {
@@ -116,7 +158,7 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 		request.isComplete = true;
 		return request;
 	}
-
+	request.path = UrlDecoding(request.path);
 	//check HTTP method, only these 3 are valid for this project
 	static const std::set<std::string>	validMethods = {"GET", "POST", "DELETE"};
 	if (validMethods.find(request.method) == validMethods.end()) {
@@ -492,14 +534,14 @@ void testParseHttpRequest(std::vector<serverConfig>& servers) {
 		perror("socketpair");
 		exit(EXIT_FAILURE);
 	}
-		
+
 	// Write the HTTP request to one end of the socketpair.
 	ssize_t n = write(sv[1], httpRequest.c_str(), httpRequest.size());
 	std::cout << "Bytes written to socketpair: " << n << "\n";
 
 	// Signal EOF on the writing end.
 	shutdown(sv[1], SHUT_WR);
-		
+
 	// Directly call parseHttpRequest using the reading end of the socketpair.
 	// HttpRequest request = parseHttpRequest(sv[0], servers); //old
 
@@ -523,7 +565,7 @@ void testParseHttpRequest(std::vector<serverConfig>& servers) {
 	if (!request.body.empty()) {
 		std::cout << "Body: " << request.body << "\n";
 	}
-		
+
 	close(sv[0]);
 	close(sv[1]);
 }

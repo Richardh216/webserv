@@ -37,7 +37,7 @@ struct connectionState {
 	int			fd;
 	std::string	buffer; //raw request data, could be partial
 	std::chrono::steady_clock::time_point	lastActivity; //time of the last read
-	bool		isPending; //if the parsing returned, without throwing an error
+	bool		isPending = false; //if the parsing returned, without throwing an error
 };
 
 #endif

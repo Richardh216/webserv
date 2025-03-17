@@ -1,10 +1,12 @@
-#!/Users/ashirzad/homebrew/bin/python3.10
-
 import os
 import urllib.parse
 
-server_upload_path = "/cgi-bin/database/"
-filesystem_upload_path = "/Users/ashirzad/Desktop/webserv/website/cgi-bin/database/"
+print("Content-Type: text/html\n")
+
+dir_path = os.environ.get("UPLOAD_PATH")
+
+server_upload_path = dir_path[9:] + "/"
+filesystem_upload_path = dir_path + "/"
 
 links = ""
 for file in os.listdir(filesystem_upload_path):

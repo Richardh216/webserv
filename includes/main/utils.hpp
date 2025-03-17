@@ -7,5 +7,6 @@
 std::string getConfigPath(int argc, char **argv);
 void		initStatusCodeInfo(std::map<int, std::string>& inf);
 void		initContentTypes(std::map<std::string, std::string>& inf);
+void		outputRequestToFile(HttpRequest& request, const std::string& file);
 
 #endif

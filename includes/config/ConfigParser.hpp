@@ -20,6 +20,7 @@ class	ConfigParser {
 		void		getPortHost(const std::string &line, serverConfig &config);
 	public:
 		std::vector<serverConfig>	servers;
+		std::unordered_map<int, connectionState> connectionStates; //fd is the key
 		void	parseConfigFile(const std::string &filename);
 		void	tester(const std::string &inFile);
 		void	checkDuplicateServer(void);

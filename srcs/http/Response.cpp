@@ -46,14 +46,16 @@ void	Response::addHeader(const std::string& name, const std::string& value)
 	headers.insert(std::pair<std::string, std::string>(name, value));
 }
 
+void	Response::deleteQueryStr(std::string& path)
+{
+	size_t pos = path.find_last_of('?');
+	if (pos != std::string::npos) {
+		path = path.substr(0, pos);
+	}
+}
+
 void	Response::formResponse(const HttpRequest& request, const Webserv& webserv)
 {
-	if (this->choosed_server == nullptr) {
-		formError(404, webserv);
-		is_formed = true;
-		return;
-	}
-
 	this->http_version = "HTTP/1.1";
 
 	std::string	time = takeGMTTime();
@@ -61,6 +63,18 @@ void	Response::formResponse(const HttpRequest& request, const Webserv& webserv)
 
 	addHeader("Server", "webserv/0.01");
 	addHeader("Connection", "close");
+
+	if (!request.isValid) {
+		const auto& it = request.errorCodes.begin();
+		formError(it->first, webserv);
+		is_formed = true;
+		return;
+	}
+	if (this->choosed_server == nullptr) {
+		formError(404, webserv);
+		is_formed = true;
+		return;
+	}
 
 	this->request_path = request.path;
 	findRouteInConfig(request.path);
@@ -71,20 +85,21 @@ void	Response::formResponse(const HttpRequest& request, const Webserv& webserv)
 	}
 
 	std::string full_path = findFullPath(request.path);
+	deleteQueryStr(full_path);
 
-	if (full_path.empty() || !std::filesystem::exists(full_path)) {
+	if (full_path.empty() || (!std::filesystem::exists(full_path))) {
 		formError(404, webserv);
 	}
-	if (1 == 1) {
-		if (request.path.find("cgi-bin") != std::string::npos){
-			handleCGI(request, webserv);
+	else
+	{
+		if (request.path.find(".py") != std::string::npos && isMethodAllowed(request.method)){
+			handleCGI(request, webserv, full_path);
 		}
 		else if (request.method == "GET" && isMethodAllowed(request.method)) {
 			handleGET(full_path, webserv);
 		}
-		else {
+		else
 			formError(405, webserv);
-		}
 	}
 	is_formed = true;
 }
@@ -126,32 +141,32 @@ void	Response::handleGET(std::string& full_path, const Webserv& webserv)
 
 //handle CGI
 
-void	Response::handleCGI(const HttpRequest &request, const Webserv &webserv)
+void	Response::handleCGI(const HttpRequest &request, const Webserv &webserv, std::string full_path)
 {
-	if (request.path.find("/cgi-bin/upload.py") != std::string::npos)
+	FILE *file = fopen(full_path.c_str(), "r");
+	if (!file)
 	{
-		CgiHandler handler(request, webserv, "/Users/ashirzad/Desktop/webserv/website/cgi-bin/upload.py");
-
-		this->body = handler.executeCgi();
+		this->body = "Invalid file path\n";
+		status_code = "404";
+		reason_phrase = webserv.status_code_info.at(404);
 		addHeader("Content-Type", "text/plain");
 		addHeader("Content-Length", std::to_string(body.size()));
+		return ;
 	}
-	else if (request.path.find("/cgi-bin/download.py") != std::string::npos)
-	{
-		CgiHandler handler(request, webserv, "/Users/ashirzad/Desktop/webserv/website/cgi-bin/download.py");
+	std::string uploadPath = "./database";
+	if (choosed_route && !choosed_route->uploadPath.empty())
+	uploadPath = choosed_route->uploadPath;
+	CgiHandler handler(request, full_path, uploadPath);
+	this->body = handler.executeCgi();
+	int f = body.find("\n");
+	std::string content_type = body.substr(14, f - 14);
+	std::string message = body.substr(f+1);
 
-		this->body = handler.executeCgi();
-		addHeader("Content-Type", "text/html");
-		addHeader("Content-Length", std::to_string(body.size()));
-	}
-	else if (request.path.find("/cgi-bin/delete.py") != std::string::npos)
-	{
-		CgiHandler handler(request, webserv, "/Users/ashirzad/Desktop/webserv/website/cgi-bin/delete.py");
-
-		this->body = handler.executeCgi();
-		addHeader("Content-Type", "text/plain");
-		addHeader("Content-Length", std::to_string(body.size()));
-	}
+	body = message;
+	status_code = "200";
+	reason_phrase = webserv.status_code_info.at(200);
+	addHeader("Content-Type", content_type);
+	addHeader("Content-Length", std::to_string(body.size()));
 }
 
 
@@ -242,25 +257,18 @@ bool	Response::addBody(const std::string& full_path, bool is_bin)
 
 int	Response::sendResponse()
 {
-	std::string initline_and_headers;
+	std::string response;
 
-	if (!headers_sent) {
-		initline_and_headers.reserve(1024);
-		initline_and_headers = http_version + " " + status_code + " "
-			+ reason_phrase + "\r\n";
+	response.reserve(4000);
+	response = http_version + " " + status_code + " "
+		+ reason_phrase + "\r\n";
 
-		for (const auto&[key, value] : headers) {
-			initline_and_headers += key + ": " + value + "\r\n";
-		}
-		initline_and_headers += "\r\n";
-
-		if (sendChunk(initline_and_headers)) {
-			headers_sent = true;
-			total_bytes_sent = 0;
-		}
-		else return 0;
+	for (const auto&[key, value] : headers) {
+		response += key + ": " + value + "\r\n";
 	}
-	return sendChunk(this->body);
+	response += "\r\n" + body;
+
+	return sendChunk(response);
 }
 
 int	Response::sendChunk(const std::string& chunk)
@@ -302,8 +310,10 @@ bool	Response::isMethodAllowed(const std::string& method)
 	 * GET & POST are enabled by default
 	 */
 	if (!choosed_route || choosed_route->allowedMethods.empty()) {
+		// std::cout << choosed_route->allowedMethods.empty() << std::endl;
 		return (method == "GET" || method == "POST");
 	}
+
 
 	const auto& it = std::find(choosed_route->allowedMethods.begin(),
 		choosed_route->allowedMethods.end(), method);
@@ -320,7 +330,7 @@ void	Response::redirect(const Webserv& webserv)
 		return;
 	}
 
-	this->status_code = code_info->first;
+	this->status_code = std::to_string(code_info->first);
 	this->reason_phrase = code_info->second;
 	addHeader("Location", redir_inf->second);
 }

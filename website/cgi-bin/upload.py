@@ -1,10 +1,13 @@
 #!/Users/ashirzad/homebrew/bin/python3.10
 
+import sys
 import os
 import cgi
 import cgitb
 
-dir_path = "./website/cgi-bin/database"
+print("Content-Type: text/plain\n")
+
+dir_path = os.environ.get("UPLOAD_PATH")
 
 form = cgi.FieldStorage()
 
@@ -16,7 +19,11 @@ if filename == "" or data == "":
 
 file_path = f"{dir_path}/{filename}"
 
-with open(file_path, "wb") as file:
-	file.write(data)
+try:
+	with open(file_path, "wb") as file:
+		file.write(data)
+except:
+	print("No such file or directory:", file_path)
+	sys.exit(1)
 
-print(f"The {filename} got uploaded successfully ok\n")
+print(f"The {filename} got uploaded successfully\n")

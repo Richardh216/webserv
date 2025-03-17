@@ -8,3 +8,7 @@ project_info.conf
 Dockerfile
 start.sh
 request.txt
+tester
+cgi_tester
+YoupiBanane
+test.conf

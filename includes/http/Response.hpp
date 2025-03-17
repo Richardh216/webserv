@@ -4,6 +4,7 @@
 #include <ctime>
 #include <sys/stat.h>
 #include <filesystem>
+#include <fstream>
 
 struct Webserv;
 struct HttpRequest;
@@ -16,7 +17,6 @@ class Response
 		bool			is_formed = false;
 		int				fd;
 		int				total_bytes_sent = 0;
-		bool			headers_sent = false;
 		std::string		request_path;
 
 		std::string http_version;
@@ -41,9 +41,10 @@ class Response
 		std::string	checkContentType(std::string file, const Webserv& webserv);
 		std::string takeGMTTime();
 		std::string checkLastWriteTime(const char *path);
+		void		deleteQueryStr(std::string& path);
 
 		//handle CGI
-		void	handleCGI(const HttpRequest &request, const Webserv &webserv);
+		void	handleCGI(const HttpRequest &request, const Webserv &webserv, std::string full_path);
 
 	public:
 		std::string findHeaderValue(const std::string& name,

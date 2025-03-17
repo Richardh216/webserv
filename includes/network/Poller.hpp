@@ -21,6 +21,7 @@ class Poller
 		bool	isFdWriteable(int fd_index);
 		void	addWriteEvent(int fd_index);
 		void	removeWriteEvent(int fd_index);
+		void	removeReadEvent(int fd_index);
 };
 
 #endif

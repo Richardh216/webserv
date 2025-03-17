@@ -98,8 +98,7 @@ void	ConfigParser::getPortHost(const std::string &line, serverConfig &config) {
 void	ConfigParser::parseConfigFile(const std::string &filename) { //builds list of serverConfig each contains a list of Route
 	std::ifstream	file(filename);
 	if (!file.is_open()) {
-		std::cerr << "Error opening config file: " << filename << std::endl;
-		return;
+		throw std::runtime_error("Error opening config file: " + filename);
 	}
 
 	std::string		line;

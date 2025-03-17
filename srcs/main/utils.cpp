@@ -56,3 +56,26 @@ void	initContentTypes(std::map<std::string, std::string>& inf)
 	inf[".tiff"] = "image/tiff";
 	inf[".bmp"] = "image/bmp";
 }
+
+void outputRequestToFile(HttpRequest& request, const std::string& file)
+{
+	std::ofstream outFile(file, std::ios::app);
+	if (!outFile) {
+		return;
+	}
+
+	outFile << "--------------------\n";
+	outFile << "poll_fd: " << request.poll_fd.fd << "\n";
+	outFile << "Method: " << request.method << "\n";
+	outFile << "Path: " << request.path << "\n";
+	outFile << "HTTP Version: " << request.httpVersion << "\n";
+
+	for (const auto& header : request.headers) {
+		outFile << header.first << ": " << header.second << "\n";
+	}
+
+	outFile << "Body: " << request.body << "\n";
+	outFile << "--------------------\n\n";
+
+	outFile.close();
+}

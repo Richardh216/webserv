@@ -1,28 +1,32 @@
-#!/Users/ashirzad/homebrew/bin/python3.10
-
 import os
-import cgi
-import cgitb
 import urllib.parse
 
-path = "/Users/ashirzad/Desktop/webserv/website/cgi-bin/database"
+print("Content-Type: text/plain\n")
 
+dir_path = os.environ.get("UPLOAD_PATH")
 
-# # Parse form data
 query_string = os.environ.get('QUERY_STRING', '')
 
-resource = query_string[query_string.find("=") + 1:]
 
-if ".." in resource:
-	print("invalid filename\n")
+try :
+	obj = {}
+	for file in query_string.split("&"):
+		key, value = file.split("=")
+		obj[key] = value
 
-file_path = f"{path}/{resource}"
+	value = obj.get("file", "")
+	if ".." in value or value == "":
+		print("invalid query string\n")
+	file_path = f"{dir_path}/{value}"
+	if os.path.exists(file_path):
+		os.remove(file_path)
+		print(f"File '{value}' successfully got deleted\n")
+	else:
+		print(f"no such file '{value}' exists\n")
+except:
+	print("invalid request\n")
 
-if os.path.exists(file_path):
-	os.remove(file_path)
-	print(f"File '{resource}' successfully got deleted\n")
-else:
-	print(f"no suche file '{resource}' exists\n")
+
 
 
 

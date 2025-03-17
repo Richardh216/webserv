@@ -17,9 +17,10 @@ class CgiHandler
 		std::string _body;
 
 	public:
-		CgiHandler(const HttpRequest &request, const Webserv &webserv, std::string scriptPath);
+		CgiHandler(const HttpRequest &request, std::string scriptPath, std::string uploadPath);
 		~CgiHandler(void);
 
+		std::string getUploadPath(std::string scriptPath, std::string uploadPath);
 		std::string getQueryString(std::string path);
 		char **getEnvAsCstrArray() const;
 		std::string executeCgi();

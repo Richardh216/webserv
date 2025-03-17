@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>413 - Payload Too Large</title>
+	<link rel="icon" type="image/x-icon" href="/images/favicon.png">
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			background: linear-gradient(120deg, #141E30, #243B55);
+			color: white;
+			font-family: Arial, sans-serif;
+			text-align: center;
+		}
+		.container {
+			max-width: 600px;
+		}
+		@keyframes float {
+			from { transform: translateY(0px); }
+			to { transform: translateY(-10px); }
+		}
+		h1 {
+			font-size: 5rem;
+			margin: 0;
+			animation: float 2s ease-in-out infinite alternate;
+		}
+		p {
+			font-size: 1.2rem;
+		}
+		.btn {
+			display: inline-block;
+			padding: 12px 24px;
+			margin-top: 20px;
+			font-size: 1rem;
+			text-decoration: none;
+			color: white;
+			background-color: #ff6b6b;
+			border-radius: 5px;
+			transition: background 0.3s;
+		}
+		.btn:hover {
+			background-color: #ff4f4f;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>413</h1>
+		<p>Oops! It looks like your request payload is too large.</p>
+		<a href="../" class="btn">Go Home</a>
+	</div>
+</body>
+</html>

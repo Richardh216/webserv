@@ -10,7 +10,8 @@
 #include <poll.h>
 #include "../network/Poller.hpp"
 
-struct serverConfig;
+struct	serverConfig;
+class	ConfigParser;
 
 struct HttpRequest {
 	std::string	method;
@@ -29,5 +30,6 @@ serverConfig &selectServer(int fd, std::vector<serverConfig>& servers, std::stri
 HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<serverConfig>& servers);
 void 		timeOutCheck(int curr_nfds, std::unordered_map<int, connectionState>& connectionStates, Poller& poller);
 void		testParseHttpRequest(std::vector<serverConfig>& servers);
+int			readFromFd(int fd, ConfigParser& parser, connectionState &state);
 
 #endif
