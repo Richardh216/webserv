@@ -1,12 +1,5 @@
 #include "../../includes/webserv.hpp"
 
-/*
-TODO: 
-
-1. double check error handling and in general handling of client_max_body_size
-
-*/
-
 std::string	ConfigParser::trim(const std::string &str) {
 	size_t	first = str.find_first_not_of(" \t"); //first not whitespace
 	if (first == std::string::npos) return "";
@@ -52,7 +45,7 @@ std::string	ConfigParser::getLocationPath(const std::string &line) {
 	return trim(path);
 }
 
-int	ConfigParser::parseSize(const std::string &sizeStr) { //discuss error handling
+int	ConfigParser::parseSize(const std::string &sizeStr) {
 	long	tmpVal;
 	if (!isdigit(sizeStr.back()) && (sizeStr.back() != 'M' && sizeStr.back() != 'm' && sizeStr.back() != 'k' && sizeStr.back() != 'K'))
 		return -1; //use default value if it's incoherent
@@ -82,16 +75,12 @@ int	ConfigParser::parseSize(const std::string &sizeStr) { //discuss error handli
 void	ConfigParser::getPortHost(const std::string &line, serverConfig &config) {
 	size_t	pos = line.find(':');
 	if (pos != std::string::npos) {
-		config.port = line.substr(pos + 1); //old
-		config.host = line.substr(0, pos); //old
-		// config.host.push_back(line.substr(0, pos)); //new for vector
-		// config.port.push_back(line.substr(pos + 1));
+		config.port = line.substr(pos + 1);
+		config.host = line.substr(0, pos);
 	}
 	else {
-		config.port = line; //if only one, it makes it the port, could be error prone //old
+		config.port = line;
 		config.host = "0.0.0.0";
-		// config.host.push_back("0.0.0.0");  // Default host if none is provided
-		// config.port.push_back(line); //if no colon treat line as port
 	}
 }
 
@@ -281,59 +270,59 @@ void	ConfigParser::checkingFunction(void) {
 	removeInvalidLocationPath();
 }
 
-void	ConfigParser::tester(const std::string &inFile) {
-	ConfigParser parser;
-	parser.parseConfigFile(inFile);
-	parser.checkingFunction();
+// void	ConfigParser::tester(const std::string &inFile) {
+// 	ConfigParser parser;
+// 	parser.parseConfigFile(inFile);
+// 	parser.checkingFunction();
 
-	for (const auto &server : parser.servers) {
-		std::cout << "\nServer on " << server.host << ":" << server.port << "\n"; //single print
-		// for (size_t i = 0; i < server.host.size(); ++i) { //only looping list of hosts now
-		// 	std::cout << "  - " << server.host[i] << ":" << server.port[i] << "\n";
-		// }
+// 	for (const auto &server : parser.servers) {
+// 		std::cout << "\nServer on " << server.host << ":" << server.port << "\n"; //single print
+// 		// for (size_t i = 0; i < server.host.size(); ++i) { //only looping list of hosts now
+// 		// 	std::cout << "  - " << server.host[i] << ":" << server.port[i] << "\n";
+// 		// }
 
-		if (!server.serverNames.empty()) {
-			std::cout << " Server Name: ";
-			for (const auto &name : server.serverNames) {
-				std::cout << name << " ";
-			}
-			std::cout << "\n";
-		}
+// 		if (!server.serverNames.empty()) {
+// 			std::cout << " Server Name: ";
+// 			for (const auto &name : server.serverNames) {
+// 				std::cout << name << " ";
+// 			}
+// 			std::cout << "\n";
+// 		}
 
-		std::cout << " Server Root: " << server.root << "\n";
+// 		std::cout << " Server Root: " << server.root << "\n";
 
-		if (!server.errorPages.empty()) {
-			std::cout << " Error Pages:\n";
-			for (const auto &errorPage : server.errorPages) {
-				std::cout << "  " << errorPage.first << " -> " << errorPage.second << "\n";
-			}
-		}
+// 		if (!server.errorPages.empty()) {
+// 			std::cout << " Error Pages:\n";
+// 			for (const auto &errorPage : server.errorPages) {
+// 				std::cout << "  " << errorPage.first << " -> " << errorPage.second << "\n";
+// 			}
+// 		}
 
-		std::cout << " Client Max Body Size: " << server.client_max_body_size << " bytes\n";
+// 		std::cout << " Client Max Body Size: " << server.client_max_body_size << " bytes\n";
 
-		std::cout << " Routes:\n";
-		for (const auto &route : server.routes) {
-			std::cout << "  - Path: " << route.path << "\n";
-			if (!route.root.empty()) std::cout << "    Root: " << route.root << "\n";
-			if (!route.indexFile.empty()) std::cout << "    Index File: " << route.indexFile << "\n";
-			if (!route.allowedMethods.empty()) {
-				std::cout << "    Allowed Methods (limit_except): ";
-				for (const auto &method : route.allowedMethods) std::cout << method << " ";
-				std::cout << "\n";
-			}
-			if (!route.alias.empty()) std::cout << "    alias: " << route.alias << "\n";
-			if (!route.cgiExtension.empty()) std::cout << "    CGI Extension: " << route.cgiExtension << "\n";
-			if (!route.cgiPath.empty()) std::cout << "    CGI Path: " << route.cgiPath << "\n";
-			// std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n"; //print even if not set
-			std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n";
-			std::cout << "    Upload Enable: " << (route.uploadEnabled ? "On" : "Off") << "\n";
-			if (!route.uploadPath.empty()) std::cout << "    Upload Path: " << route.uploadPath << "\n";
-			if (!route.redirection.empty()) {
-				std::cout << " Redirection:\n";
-				for (const auto &redir : route.redirection) {
-					std::cout << "  " << redir.first << " -> " << redir.second << "\n\n";
-				}
-			}
-		}
-	}
-}
+// 		std::cout << " Routes:\n";
+// 		for (const auto &route : server.routes) {
+// 			std::cout << "  - Path: " << route.path << "\n";
+// 			if (!route.root.empty()) std::cout << "    Root: " << route.root << "\n";
+// 			if (!route.indexFile.empty()) std::cout << "    Index File: " << route.indexFile << "\n";
+// 			if (!route.allowedMethods.empty()) {
+// 				std::cout << "    Allowed Methods (limit_except): ";
+// 				for (const auto &method : route.allowedMethods) std::cout << method << " ";
+// 				std::cout << "\n";
+// 			}
+// 			if (!route.alias.empty()) std::cout << "    alias: " << route.alias << "\n";
+// 			if (!route.cgiExtension.empty()) std::cout << "    CGI Extension: " << route.cgiExtension << "\n";
+// 			if (!route.cgiPath.empty()) std::cout << "    CGI Path: " << route.cgiPath << "\n";
+// 			// std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n"; //print even if not set
+// 			std::cout << "    Autoindex: " << (route.autoindex ? "On" : "Off") << "\n";
+// 			std::cout << "    Upload Enable: " << (route.uploadEnabled ? "On" : "Off") << "\n";
+// 			if (!route.uploadPath.empty()) std::cout << "    Upload Path: " << route.uploadPath << "\n";
+// 			if (!route.redirection.empty()) {
+// 				std::cout << " Redirection:\n";
+// 				for (const auto &redir : route.redirection) {
+// 					std::cout << "  " << redir.first << " -> " << redir.second << "\n\n";
+// 				}
+// 			}
+// 		}
+// 	}
+// }

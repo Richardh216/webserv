@@ -1,18 +1,5 @@
 #include "../../includes/webserv.hpp"
 
-/*
-TODO
-
-1 .check error handling when parsing client_max_body_size
-
-2. split up the function into smaller chunks
-
-3. test more with partial requests
-
-seems to work with requests recieved in full, need to check partial requests and it needs to be implemented
-
-*/
-
 int	readFromFd(int fd, ConfigParser& parser, connectionState &state)
 {
 	char	tmpBuf[4096];
@@ -126,8 +113,8 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 	if (headerEnd == std::string::npos) {
 		return request; //headers not complete
 	}
-	//Correctly identify the delimiters (might not be error-prone with: "remove trailing '\r")?
-	bodySep = hasCarriageReturn ? 4 : 2; //double check
+	//Correctly identify the delimiters
+	bodySep = hasCarriageReturn ? 4 : 2;
 	delimLen = hasCarriageReturn ? 2 : 1;
 
 	//create a stream from the headers
@@ -145,10 +132,6 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 		request.isComplete = true; //consider it complete so connection can be closed
 		return request;
 	}
-	//remove trailin '\r' if it exists, check if uniform delimlen is still needed
-	// if (!line.empty() || line.back() == '\r') {
-	// 	line.pop_back();
-	// }
 
 	//split the request line into method, path ...
 	std::istringstream	lineStream(line);
@@ -255,7 +238,7 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 		request.isComplete = true;
 		return request;
 	} else if (currentServer.client_max_body_size == -1) {
-		BUFFER_SIZE = DEFAULT_MAX_BODY_SIZE; //idk if this is how it should be, but it is how it is
+		BUFFER_SIZE = DEFAULT_MAX_BODY_SIZE;
 	} else {
 		BUFFER_SIZE = currentServer.client_max_body_size;
 	}
@@ -271,7 +254,7 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 				request.isComplete = true;
 				return request;
 			}
-			if (contentLen > BUFFER_SIZE) { //would throw error above 1MB default value, can be tweaked easily if needed
+			if (contentLen > BUFFER_SIZE) {
 				request.isValid = false;
 				request.errorCodes[413] = "Content Too Large";
 				request.isComplete = true;
@@ -290,8 +273,6 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 		}
 		//Get the start of the body
 		size_t	bodyStart = headerEnd + bodySep;
-		// size_t bodyStart = headerEnd + (buffer.compare(headerEnd, 4, "\r\n\r\n") == 0 ? 4 : 2); for checks
-		// std::cout << "BODY START: " << bodyStart << std::endl;
 
 		//Check for full body
 		if (buffer.size() < bodyStart + contentLen) {
@@ -308,9 +289,8 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 	//Handle Chunked Transfer Encoding
 	else if (hasChunkedEncoding) {
 		std::string	chunkedBody;
-		size_t	pos = headerEnd + bodySep; //double check if bodySep is correct
+		size_t	pos = headerEnd + bodySep;
 		size_t	totalBodySize = 0;
-		// size_t	originalPos = pos;
 		bool	lastChunk = false;
 
 		while (true) {
@@ -416,156 +396,156 @@ HttpRequest	parseHttpRequestFromBuffer(std::string &buffer, int fd, std::vector<
 			}
 		}
 		//For GET/Delete with no content info or HTTP/1.0 POST, just get headers
-		buffer.erase(0, headerEnd + bodySep); //double check bodySep, might be worth to check every time if it exists
+		buffer.erase(0, headerEnd + bodySep);
 		request.isValid = true;
 		request.isComplete = true;
 	}
 	return request;
 }
 
-void testParseHttpRequest(std::vector<serverConfig>& servers) {
+// void testParseHttpRequest(std::vector<serverConfig>& servers) {
 
 
-	// std::string httpRequest = //one for delete
-	// "DELETE /users/123 HTTP/1.1\r\n"
-	// "Host: example.com\r\n"
-	// "User-Agent: MyClient/1.0\r\n"
-	// "\r\n";
+// 	// std::string httpRequest = //one for delete
+// 	// "DELETE /users/123 HTTP/1.1\r\n"
+// 	// "Host: example.com\r\n"
+// 	// "User-Agent: MyClient/1.0\r\n"
+// 	// "\r\n";
 
-	// std::string httpRequest = //one for get
-	// "GET /users/123 HTTP/1.1\r\n"
-	// "Host: example.com\r\n"
-	// "User-Agent: MyClient/1.0\r\n"
-	// "Accept: application/json\r\n"
-	// "\r\n";
+// 	// std::string httpRequest = //one for get
+// 	// "GET /users/123 HTTP/1.1\r\n"
+// 	// "Host: example.com\r\n"
+// 	// "User-Agent: MyClient/1.0\r\n"
+// 	// "Accept: application/json\r\n"
+// 	// "\r\n";
 
-	// std::string httpRequest = //chunked complex normal
-	// 	"POST /api/data HTTP/1.1\r\n"
-	// 	"Host: example.com\r\n"
-	// 	"User-Agent: ChunkedClient/1.0\r\n"
-	// 	"Content-Type: application/json\r\n"
-	// 	"Transfer-Encoding: chunked\r\n"
-	// 	"\r\n"
-	// 	"4\r\n"
-	// 	"{\"na\r\n"
-	// 	"6\r\n"
-	// 	"me\": \"\r\n"
-	// 	"6\r\n"
-	// 	"John D\r\n"
-	// 	"4\r\n"
-	// 	"oe\",\r\n"
-	// 	"3\r\n"
-	// 	"\"em\r\n"
-	// 	"5\r\n"
-	// 	"ail\":\r\n"
-	// 	"5\r\n"
-	// 	"\"john\r\n"
-	// 	"6\r\n"
-	// 	".doe@r\n"
-	// 	"7\r\n"
-	// 	"example\r\n"
-	// 	"6\r\n"
-	// 	".com\",\r\n"
-	// 	"3\r\n"
-	// 	"\"ag\r\n"
-	// 	"6\r\n"
-	// 	"e\": 3}\r\n"
-	// 	"0\r\n"
-	// 	"\r\n";
+// 	// std::string httpRequest = //chunked complex normal
+// 	// 	"POST /api/data HTTP/1.1\r\n"
+// 	// 	"Host: example.com\r\n"
+// 	// 	"User-Agent: ChunkedClient/1.0\r\n"
+// 	// 	"Content-Type: application/json\r\n"
+// 	// 	"Transfer-Encoding: chunked\r\n"
+// 	// 	"\r\n"
+// 	// 	"4\r\n"
+// 	// 	"{\"na\r\n"
+// 	// 	"6\r\n"
+// 	// 	"me\": \"\r\n"
+// 	// 	"6\r\n"
+// 	// 	"John D\r\n"
+// 	// 	"4\r\n"
+// 	// 	"oe\",\r\n"
+// 	// 	"3\r\n"
+// 	// 	"\"em\r\n"
+// 	// 	"5\r\n"
+// 	// 	"ail\":\r\n"
+// 	// 	"5\r\n"
+// 	// 	"\"john\r\n"
+// 	// 	"6\r\n"
+// 	// 	".doe@r\n"
+// 	// 	"7\r\n"
+// 	// 	"example\r\n"
+// 	// 	"6\r\n"
+// 	// 	".com\",\r\n"
+// 	// 	"3\r\n"
+// 	// 	"\"ag\r\n"
+// 	// 	"6\r\n"
+// 	// 	"e\": 3}\r\n"
+// 	// 	"0\r\n"
+// 	// 	"\r\n";
 
-	std::string httpRequest = //chunked complex just \n
-		"POST /api/data HTTP/1.1\n"
-		"Host: example.com\n"
-		"User-Agent: ChunkedClient/1.0\n"
-		"Content-Type: application/json\n"
-		"Transfer-Encoding: chunked\n"
-		"\n"
-		"4\n"
-		"{\"na\n"
-		"6\n"
-		"me\": \"\n"
-		"6\n"
-		"John D\n"
-		"4\n"
-		"oe\",\n"
-		"3\n"
-		"\"em\n"
-		"5\n"
-		"ail\":\n"
-		"5\n"
-		"\"john\n"
-		"6\n"
-		".doe@r\n"
-		"7\n"
-		"example\n"
-		"6\n"
-		".com\",\n"
-		"3\n"
-		"\"ag\n"
-		"6\n"
-		"e\": 3}\n"
-		"0\n"
-		"\n";
+// 	std::string httpRequest = //chunked complex just \n
+// 		"POST /api/data HTTP/1.1\n"
+// 		"Host: example.com\n"
+// 		"User-Agent: ChunkedClient/1.0\n"
+// 		"Content-Type: application/json\n"
+// 		"Transfer-Encoding: chunked\n"
+// 		"\n"
+// 		"4\n"
+// 		"{\"na\n"
+// 		"6\n"
+// 		"me\": \"\n"
+// 		"6\n"
+// 		"John D\n"
+// 		"4\n"
+// 		"oe\",\n"
+// 		"3\n"
+// 		"\"em\n"
+// 		"5\n"
+// 		"ail\":\n"
+// 		"5\n"
+// 		"\"john\n"
+// 		"6\n"
+// 		".doe@r\n"
+// 		"7\n"
+// 		"example\n"
+// 		"6\n"
+// 		".com\",\n"
+// 		"3\n"
+// 		"\"ag\n"
+// 		"6\n"
+// 		"e\": 3}\n"
+// 		"0\n"
+// 		"\n";
 
-	// std::string httpRequest = // just \n instead of \r\n test
-	// 	"POST /api/data HTTP/1.1\n"
-	// 	"Host: api.example.com\n"
-	// 	"User-Agent: MyTestClient/2.0\n"
-	// 	"cOnTEnt-type: application/json\n"
-	// 	"Accept: application/json\n"
-	// 	"Authorization: Bearer abcdef123456\n"
-	// 	"cOnTEnt-lEngtH: 53\n"
-	// 	"\n"
-	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
+// 	// std::string httpRequest = // just \n instead of \r\n test
+// 	// 	"POST /api/data HTTP/1.1\n"
+// 	// 	"Host: api.example.com\n"
+// 	// 	"User-Agent: MyTestClient/2.0\n"
+// 	// 	"cOnTEnt-type: application/json\n"
+// 	// 	"Accept: application/json\n"
+// 	// 	"Authorization: Bearer abcdef123456\n"
+// 	// 	"cOnTEnt-lEngtH: 53\n"
+// 	// 	"\n"
+// 	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 
-	// std::string httpRequest = //content-length
-	// 	"POST /api/data HTTP/1.1\r\n"
-	// 	"Host: api.example.com\r\n"
-	// 	"User-Agent: MyTestClient/2.0\r\n"
-	// 	"cOnTEnt-type: application/json\r\n"
-	// 	"Accept: application/json\r\n"
-	// 	"Authorization: Bearer abcdef123456\r\n"
-	// 	"cOnTEnt-lEngtH: 53\r\n"
-	// 	"\r\n"
-	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
+// 	// std::string httpRequest = //content-length
+// 	// 	"POST /api/data HTTP/1.1\r\n"
+// 	// 	"Host: api.example.com\r\n"
+// 	// 	"User-Agent: MyTestClient/2.0\r\n"
+// 	// 	"cOnTEnt-type: application/json\r\n"
+// 	// 	"Accept: application/json\r\n"
+// 	// 	"Authorization: Bearer abcdef123456\r\n"
+// 	// 	"cOnTEnt-lEngtH: 53\r\n"
+// 	// 	"\r\n"
+// 	// 	"{\"name\": \"John Doe\", \"email\": \"john.doe@example.com\"}";
 
-	int sv[2];
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1) {
-		perror("socketpair");
-		exit(EXIT_FAILURE);
-	}
+// 	int sv[2];
+// 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1) {
+// 		perror("socketpair");
+// 		exit(EXIT_FAILURE);
+// 	}
 
-	// Write the HTTP request to one end of the socketpair.
-	ssize_t n = write(sv[1], httpRequest.c_str(), httpRequest.size());
-	std::cout << "Bytes written to socketpair: " << n << "\n";
+// 	// Write the HTTP request to one end of the socketpair.
+// 	ssize_t n = write(sv[1], httpRequest.c_str(), httpRequest.size());
+// 	std::cout << "Bytes written to socketpair: " << n << "\n";
 
-	// Signal EOF on the writing end.
-	shutdown(sv[1], SHUT_WR);
+// 	// Signal EOF on the writing end.
+// 	shutdown(sv[1], SHUT_WR);
 
-	// Directly call parseHttpRequest using the reading end of the socketpair.
-	// HttpRequest request = parseHttpRequest(sv[0], servers); //old
+// 	// Directly call parseHttpRequest using the reading end of the socketpair.
+// 	// HttpRequest request = parseHttpRequest(sv[0], servers); //old
 
-	HttpRequest request = parseHttpRequestFromBuffer(httpRequest, sv[0], servers); //new
+// 	HttpRequest request = parseHttpRequestFromBuffer(httpRequest, sv[0], servers); //new
 
-	if (!request.errorCodes.empty()) {
-		std::cout << " Error Codes:\n";
-		for (const auto &errorCode : request.errorCodes) {
-			std::cout << "  " << errorCode.first << " -> " << errorCode.second << "\n";
-		}
-	}
+// 	if (!request.errorCodes.empty()) {
+// 		std::cout << " Error Codes:\n";
+// 		for (const auto &errorCode : request.errorCodes) {
+// 			std::cout << "  " << errorCode.first << " -> " << errorCode.second << "\n";
+// 		}
+// 	}
 
-	// Output parsed results.
-	std::cout << "\npoll_fd: " << request.poll_fd.fd << "\n";
-	std::cout << "\nMethod: " << request.method << "\n";
-	std::cout << "Path: " << request.path << "\n";
-	std::cout << "HTTP Version: " << request.httpVersion << "\n";
-	for (const auto& header : request.headers) {
-		std::cout << header.first << ": " << header.second << "\n";
-	}
-	if (!request.body.empty()) {
-		std::cout << "Body: " << request.body << "\n";
-	}
+// 	// Output parsed results.
+// 	std::cout << "\npoll_fd: " << request.poll_fd.fd << "\n";
+// 	std::cout << "\nMethod: " << request.method << "\n";
+// 	std::cout << "Path: " << request.path << "\n";
+// 	std::cout << "HTTP Version: " << request.httpVersion << "\n";
+// 	for (const auto& header : request.headers) {
+// 		std::cout << header.first << ": " << header.second << "\n";
+// 	}
+// 	if (!request.body.empty()) {
+// 		std::cout << "Body: " << request.body << "\n";
+// 	}
 
-	close(sv[0]);
-	close(sv[1]);
-}
+// 	close(sv[0]);
+// 	close(sv[1]);
+// }
