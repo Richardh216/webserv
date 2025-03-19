@@ -22,7 +22,8 @@ class CgiHandler
 
 		std::string getUploadPath(std::string scriptPath, std::string uploadPath);
 		std::string getQueryString(std::string path);
-		char **getEnvAsCstrArray() const;
+		char *ft_strcpy(char *s1, const char *s2);
+		char **getEnvAsCstrArray();
 		std::string executeCgi();
 };
 

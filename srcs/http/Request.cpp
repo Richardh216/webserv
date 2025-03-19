@@ -86,9 +86,9 @@ std::string UrlDecoding(std::string path)
 
 	for(size_t i = 0; i < path.size(); i++)
 	{
-		if (path[i] == '%' && path[i + 2]){
+		if (path[i] == '%' && i + 2 < path.size()) {
 			std::string hex = path.substr(i + 1, 2);
-			decoded_path += (int)strtol(hex.c_str(), NULL, 16);
+			decoded_path += static_cast<char>(std::stoi(hex, NULL, 16));
 			i += 2;
 		}
 		else

@@ -1,5 +1,3 @@
-#!/Users/ashirzad/homebrew/bin/python3.10
-
 import sys
 import os
 import cgi

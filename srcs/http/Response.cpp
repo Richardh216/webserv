@@ -143,16 +143,6 @@ void	Response::handleGET(std::string& full_path, const Webserv& webserv)
 
 void	Response::handleCGI(const HttpRequest &request, const Webserv &webserv, std::string full_path)
 {
-	FILE *file = fopen(full_path.c_str(), "r");
-	if (!file)
-	{
-		this->body = "Invalid file path\n";
-		status_code = "404";
-		reason_phrase = webserv.status_code_info.at(404);
-		addHeader("Content-Type", "text/plain");
-		addHeader("Content-Length", std::to_string(body.size()));
-		return ;
-	}
 	std::string uploadPath = "./database";
 	if (choosed_route && !choosed_route->uploadPath.empty())
 	uploadPath = choosed_route->uploadPath;
